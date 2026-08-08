@@ -1,0 +1,140 @@
+# Continuous integration: Rust, Flutter, Web/WASM and Docker.
+#
+# Every command below is the exact one used by developers locally (see
+# scripts/build-web.ps1 and the Dockerfile), so a green run is meaningful.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pin the exact Flutter/Dart toolchain the project is developed against.
+  FLUTTER_VERSION: '3.44.6'
+  # wasm-bindgen-cli must match the wasm-bindgen crate in rust/Cargo.lock.
+  WASM_BINDGEN_VERSION: '0.2.92'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Rust core: format, lint, unit tests.
+  # ---------------------------------------------------------------------------
+  rust:
+    name: Rust (fmt · clippy · test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Check formatting
+        run: cargo fmt --manifest-path rust/Cargo.toml --check
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings
+
+      - name: Run unit tests
+        run: cargo test --manifest-path rust/Cargo.toml
+
+  # ---------------------------------------------------------------------------
+  # Flutter: static analysis + host tests (loads the native Rust library).
+  # ---------------------------------------------------------------------------
+  flutter:
+    name: Flutter (analyze · test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Host tests call RustLib.init(), which dlopens the release library from
+      # rust/target/release/ — build it first.
+      - name: Build native Rust library (release)
+        run: cargo build --release --manifest-path rust/Cargo.toml
+
+      - name: Resolve Dart dependencies
+        run: flutter pub get
+
+      - name: Static analysis
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+  # ---------------------------------------------------------------------------
+  # Web/WASM: Rust → wasm32-unknown-unknown → Flutter web bundle.
+  # ---------------------------------------------------------------------------
+  web:
+    name: Web (WASM bundle)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # FRB build-web compiles with -Z build-std (nightly + rust-src).
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Install wasm-pack and matching wasm-bindgen-cli
+        run: |
+          cargo install wasm-pack --locked
+          cargo install wasm-bindgen-cli --locked --version ${{ env.WASM_BINDGEN_VERSION }}
+
+      - name: Resolve Dart dependencies
+        run: flutter pub get
+
+      - name: Build Rust WASM module (flutter_rust_bridge build-web)
+        run: dart run flutter_rust_bridge build-web --release --dart-root ${{ github.workspace }}
+
+      - name: Build Flutter Web bundle
+        run: flutter build web --release
+
+      - name: Upload Web bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-bundle
+          path: build/web
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Docker: validate the containerized deployment actually builds.
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    needs: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t deopti-downloader:ci .

@@ -1,0 +1,28 @@
+[package]
+name = "rust_lib_deopti_downloader"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[features]
+default = []
+encryption = ["deopti_transfer/encryption", "dep:getrandom"]
+
+[dependencies]
+deopti_transfer = { version = "0.1.1", features = ["std"] }
+flutter_rust_bridge = "=2.12.0"
+getrandom = { version = "0.4", default-features = false, optional = true }
+qrcode = { version = "0.14.1" }
+rustbinary = { version = "0.1.4" }
+rxing = { version = "0.9.2", default-features = false, features = [
+    "qrcode",
+    "decoders",
+    "encoding_rs",
+] }
+serde = { version = "1", features = ["derive"] }
+
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

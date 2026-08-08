@@ -1,0 +1,25 @@
+# Keep the Docker build context lean.
+.dart_tool/
+.pub-cache/
+.pub/
+build/
+android/
+ios/
+linux/
+macos/
+windows/
+ohos/
+integration_test/
+test_driver/
+rust/target/
+web/pkg/
+*.dll
+*.so
+*.dylib
+.git/
+.github/
+*.iml
+.idea/
+.vscode/
+docs/
+README*

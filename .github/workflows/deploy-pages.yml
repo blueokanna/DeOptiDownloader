@@ -1,0 +1,79 @@
+# Build the Web/WASM bundle and publish it to GitHub Pages.
+#
+# Requires: Settings → Pages → Source: "GitHub Actions".
+#
+# Note on cross-origin isolation: the sync FRB bridge used by this app does
+# NOT need SharedArrayBuffer, so GitHub Pages (which cannot send custom
+# COOP/COEP headers) works fine. If the bridge is ever switched back to a
+# threaded worker pool, self-host on nginx with the headers in nginx.conf.
+
+name: Deploy Web to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: '3.44.6'
+  WASM_BINDGEN_VERSION: '0.2.92'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Install wasm-pack and matching wasm-bindgen-cli
+        run: |
+          cargo install wasm-pack --locked
+          cargo install wasm-bindgen-cli --locked --version ${{ env.WASM_BINDGEN_VERSION }}
+
+      - name: Resolve Dart dependencies
+        run: flutter pub get
+
+      - name: Build Rust WASM module (flutter_rust_bridge build-web)
+        run: dart run flutter_rust_bridge build-web --release --dart-root ${{ github.workspace }}
+
+      - name: Build Flutter Web bundle
+        run: flutter build web --release
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
