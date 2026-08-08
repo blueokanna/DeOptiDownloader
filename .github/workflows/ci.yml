@@ -24,7 +24,7 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Rust core: format, lint, unit tests.
+  # Rust core + server: format, lint, unit tests (whole workspace).
   # ---------------------------------------------------------------------------
   rust:
     name: Rust (fmt · clippy · test)
@@ -41,13 +41,13 @@ jobs:
           workspaces: rust
 
       - name: Check formatting
-        run: cargo fmt --manifest-path rust/Cargo.toml --check
+        run: cargo fmt --all --manifest-path rust/Cargo.toml --check
 
       - name: Clippy (deny warnings)
-        run: cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets -- -D warnings
 
       - name: Run unit tests
-        run: cargo test --manifest-path rust/Cargo.toml
+        run: cargo test --manifest-path rust/Cargo.toml --workspace
 
   # ---------------------------------------------------------------------------
   # Flutter: static analysis + host tests (loads the native Rust library).
@@ -105,10 +105,14 @@ jobs:
         with:
           workspaces: rust
 
-      - name: Install wasm-pack and matching wasm-bindgen-cli
+      - name: Install wasm-pack and matching wasm-bindgen-cli (prebuilt)
         run: |
-          cargo install wasm-pack --locked
-          cargo install wasm-bindgen-cli --locked --version ${{ env.WASM_BINDGEN_VERSION }}
+          curl -sSL https://github.com/rustwasm/wasm-pack/releases/download/v0.15.0/wasm-pack-v0.15.0-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /tmp
+          sudo cp /tmp/wasm-pack-v0.15.0-x86_64-unknown-linux-musl/wasm-pack /usr/local/bin/
+          curl -sSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.92/wasm-bindgen-0.2.92-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /tmp
+          sudo cp /tmp/wasm-bindgen-0.2.92-x86_64-unknown-linux-musl/wasm-bindgen /usr/local/bin/
+          wasm-pack --version
+          wasm-bindgen --version
 
       - name: Resolve Dart dependencies
         run: flutter pub get

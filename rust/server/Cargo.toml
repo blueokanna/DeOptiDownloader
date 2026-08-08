@@ -1,0 +1,11 @@
+[package]
+name = "deopti-server"
+version = "0.1.0"
+edition = "2021"
+description = "Zero-dependency std-only static file server for the DeOptiDownloader Web bundle"
+
+[[bin]]
+name = "deopti-server"
+path = "src/main.rs"
+
+[dependencies]

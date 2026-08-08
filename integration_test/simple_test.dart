@@ -16,35 +16,36 @@ void main() {
   });
 
   testWidgets('Rust self-test passes', (WidgetTester tester) async {
-    final ok = await runSelfTest();
+    final ok = runSelfTest();
     expect(ok, isTrue);
   });
 
-  testWidgets('Bridge round trip produces a valid QR matrix',
-      (WidgetTester tester) async {
-    final packed = await packFileFfi(
+  testWidgets('Bridge round trip produces a valid QR matrix', (
+    WidgetTester tester,
+  ) async {
+    final packed = packFileFfi(
       name: 'it.bin',
       mimeType: 'application/octet-stream',
       bytes: List<int>.generate(4096, (i) => i % 251),
     );
     expect(packed.container, isNotEmpty);
 
-    final session = await senderCreate(
+    final session = senderCreate(
       container: packed.container,
       frameBytes: 1000,
       sessionId: 0x0c_d1,
     );
-    final info = await senderInfo(session: session);
+    final info = senderInfo(session: session);
     expect(info.k, greaterThan(0));
     expect(info.qrVersion, inInclusiveRange(1, 40));
 
-    final frame = await senderNextQr(session: session);
+    final frame = senderNextQr(session: session);
     expect(frame.frame.bytes.length, 1000);
     expect(frame.qr.width * frame.qr.height, frame.qr.cells.length);
     expect(frame.qr.width, greaterThanOrEqualTo(21));
 
     // Every emitted frame carries the stream identity in its header.
-    final frame2 = await senderNextQr(session: session);
+    final frame2 = senderNextQr(session: session);
     expect(frame2.frame.seq, greaterThan(frame.frame.seq));
   });
 

@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 251598326;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1002531137;
 
 // Section: executor
 
@@ -520,36 +520,6 @@ fn wire__crate__api__qr__qr_encode_impl(
             deserializer.end();
             transform_result_sse::<_, String>((move || {
                 let output_ok = crate::api::qr::qr_encode(&api_data)?;
-                Ok(output_ok)
-            })())
-        },
-    )
-}
-fn wire__crate__api__transfer__qr_encode_frame_impl(
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "qr_encode_frame",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
-            deserializer.end();
-            transform_result_sse::<_, String>((move || {
-                let output_ok = crate::api::transfer::qr_encode_frame(api_bytes)?;
                 Ok(output_ok)
             })())
         },
@@ -1600,26 +1570,25 @@ fn pde_ffi_dispatcher_sync_impl(
         13 => wire__crate__api__qr__qr_decode_gray_impl(ptr, rust_vec_len, data_len),
         14 => wire__crate__api__qr__qr_decode_rgba_impl(ptr, rust_vec_len, data_len),
         15 => wire__crate__api__qr__qr_encode_impl(ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__transfer__qr_encode_frame_impl(ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__qr__qr_version_for_impl(ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__transfer__receiver_create_impl(ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__transfer__receiver_push_impl(ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__transfer__receiver_state_impl(ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__transfer__run_self_test_impl(ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__transfer__sender_create_impl(ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__transfer__sender_info_impl(ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__transfer__sender_next_impl(ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__transfer__sender_next_qr_impl(ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__transfer__session_manifest_bytes_impl(ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__transfer__session_manifest_qr_impl(ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__transfer__smallest_sufficient_frame_size_for_impl(
+        16 => wire__crate__api__qr__qr_version_for_impl(ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__transfer__receiver_create_impl(ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__transfer__receiver_push_impl(ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__transfer__receiver_state_impl(ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__transfer__run_self_test_impl(ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__transfer__sender_create_impl(ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__transfer__sender_info_impl(ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__transfer__sender_next_impl(ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__transfer__sender_next_qr_impl(ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__transfer__session_manifest_bytes_impl(ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__transfer__session_manifest_qr_impl(ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__transfer__smallest_sufficient_frame_size_for_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        29 => wire__crate__api__transfer__source_block_count_for_impl(ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__transfer__unpack_file_ffi_impl(ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__transfer__unpack_file_with_password_ffi_impl(
+        28 => wire__crate__api__transfer__source_block_count_for_impl(ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__transfer__unpack_file_ffi_impl(ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__transfer__unpack_file_with_password_ffi_impl(
             ptr,
             rust_vec_len,
             data_len,

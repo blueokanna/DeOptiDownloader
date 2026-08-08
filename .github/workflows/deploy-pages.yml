@@ -48,10 +48,14 @@ jobs:
         with:
           workspaces: rust
 
-      - name: Install wasm-pack and matching wasm-bindgen-cli
+      - name: Install wasm-pack and matching wasm-bindgen-cli (prebuilt)
         run: |
-          cargo install wasm-pack --locked
-          cargo install wasm-bindgen-cli --locked --version ${{ env.WASM_BINDGEN_VERSION }}
+          curl -sSL https://github.com/rustwasm/wasm-pack/releases/download/v0.15.0/wasm-pack-v0.15.0-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /tmp
+          sudo cp /tmp/wasm-pack-v0.15.0-x86_64-unknown-linux-musl/wasm-pack /usr/local/bin/
+          curl -sSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.92/wasm-bindgen-0.2.92-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /tmp
+          sudo cp /tmp/wasm-bindgen-0.2.92-x86_64-unknown-linux-musl/wasm-bindgen /usr/local/bin/
+          wasm-pack --version
+          wasm-bindgen --version
 
       - name: Resolve Dart dependencies
         run: flutter pub get

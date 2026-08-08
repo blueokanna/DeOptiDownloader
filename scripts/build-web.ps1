@@ -32,5 +32,6 @@ if ($Release) {
   flutter build web
 }
 
-Write-Host 'Done. Serve build/web with a COOP/COEP-enabled static server'
-Write-Host '(e.g. `docker compose up` or the bundled nginx.conf).'
+Write-Host 'Done. Serve build/web with the repository Rust server:'
+Write-Host '  cargo build --release --manifest-path rust/server/Cargo.toml'
+Write-Host '  ./rust/target/release/deopti-server --root build/web --port 8080'

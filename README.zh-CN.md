@@ -37,27 +37,26 @@ English version: [README.md](README.md)。
 
 ## 与参考项目功能对齐
 
-参考项目 [bashalarmistalt/decimen-optical-transfer](
-https://github.com/bashalarmistalt/decimen-optical-transfer) 的全部功能均已
+参考项目 [bashalarmistalt/decimen-optical-transfer](https://github.com/bashalarmistalt/decimen-optical-transfer) 的全部功能均已
 实现并有所扩展：
 
-| 参考项目能力                   | DeOptiDownloader                                |
-| ------------------------------ | ----------------------------------------------- |
-| 发送文件（≤ 64 MB）            | ✅ `file_picker`，64 MB 上限                     |
-| 发送文本片段                   | ✅ 片段对话框 → `text/plain` 容器                |
-| 喷泉码二维码流                 | ✅ Rust `deopti_transfer` + `qrcode`             |
-| 摄像头 → 二维码解码 → 文件     | ✅ Rust `rxing` 解码（原生 + WASM）              |
-| 提供文件前校验 SHA-256          | ✅ 容器层完成 BLAKE3 摘要校验                    |
-| 仅在有益时 gzip                | ✅ 由 `deopti_transfer::pack_file` 处理          |
-| 保留文件名 / 媒体类型          | ✅ DCF3 容器                                    |
-| 进度与“无信号”提示             | ✅ 进度条、流锁定行、提示卡片                    |
-| 传输时保持屏幕常亮             | ✅ `wakelock_plus`（发送与接收）                 |
-| 发送端可调帧率 / 帧大小        | ✅ 10/15/20/24/30/60 fps，500–2953 字节帧        |
-| **新增：** 密码加密            | ✅ XChaCha20-Poly1305 + Argon2id（可选）         |
-| **新增：** 自动重新锁定        | ✅ Rust 内流冲突自动重置                         |
-| **新增：** 会话清单二维码      | ✅ `rustbinary` 编码的设置码 + 接收预览          |
-| **新增：** 诊断自检            | ✅ 应用内 `runSelfTest()`（首页 → 诊断图标）     |
-| **新增：** Material 3 + 响应式 | ✅ Google 字体、M3 令牌、自适应布局             |
+| 参考项目能力                   | DeOptiDownloader                             |
+| ------------------------------ | -------------------------------------------- |
+| 发送文件（≤ 64 MB）            | ✅ `file_picker`，64 MB 上限                 |
+| 发送文本片段                   | ✅ 片段对话框 → `text/plain` 容器            |
+| 喷泉码二维码流                 | ✅ Rust `deopti_transfer` + `qrcode`         |
+| 摄像头 → 二维码解码 → 文件     | ✅ Rust `rxing` 解码（原生 + WASM）          |
+| 提供文件前校验 SHA-256         | ✅ 容器层完成 BLAKE3 摘要校验                |
+| 仅在有益时 gzip                | ✅ 由 `deopti_transfer::pack_file` 处理      |
+| 保留文件名 / 媒体类型          | ✅ DCF3 容器                                 |
+| 进度与“无信号”提示             | ✅ 进度条、流锁定行、提示卡片                |
+| 传输时保持屏幕常亮             | ✅ `wakelock_plus`（发送与接收）             |
+| 发送端可调帧率 / 帧大小        | ✅ 10/15/20/24/30/60 fps，500–2953 字节帧    |
+| **新增：** 密码加密            | ✅ XChaCha20-Poly1305 + Argon2id（可选）     |
+| **新增：** 自动重新锁定        | ✅ Rust 内流冲突自动重置                     |
+| **新增：** 会话清单二维码      | ✅ `rustbinary` 编码的设置码 + 接收预览      |
+| **新增：** 诊断自检            | ✅ 应用内 `runSelfTest()`（首页 → 诊断图标） |
+| **新增：** Material 3 + 响应式 | ✅ Google 字体、M3 令牌、自适应布局          |
 
 ## 架构
 
@@ -89,19 +88,16 @@ Rust crate 名为 `rust_lib_deopti_downloader`；桥接胶水代码位于
 
 ## 平台支持
 
-| 平台              | 发送 | 接收 | 说明                                          |
-| ----------------- | :--: | :--: | --------------------------------------------- |
-| Android           | ✅   | ✅   | `camera`（CameraX）YUV420 图像流               |
-| iOS               | ✅   | ✅   | `camera`（AVFoundation）YUV420 图像流          |
-| HarmonyOS Next    | ✅   | ✅¹  | 见 [docs/harmonyos.md](docs/harmonyos.md)      |
-| Windows           | ✅   | ✅   | `camera_windows` 后端                          |
-| macOS             | ✅   | ✅   | `camera`（AVFoundation）                       |
-| Linux             | ✅   | ⚠️²  | 尚无统一摄像头后端                             |
-| Web / WASM        | ✅   | ✅   | getUserMedia + canvas → Rust WASM 解码         |
-| Docker            | ✅   | ✅   | 提供 Web 构建（见下文）                        |
-
-¹ HarmonyOS 需接入一个实现 `CameraFrameSource` 的摄像头后端（几十行代码）——
-应用层与平台无关。
+| 平台           | 发送 | 接收 | 说明                                        |
+| -------------- | :--: | :--: | ------------------------------------------- |
+| Android        |  ✅  |  ✅  | `camera`（CameraX）YUV420 图像流            |
+| iOS            |  ✅  |  ✅  | `camera`（AVFoundation）YUV420 图像流       |
+| HarmonyOS Next |  ✅  |  ✅  | 原生 `HarmonyCameraSource`（YUV420 + BGRA） |
+| Windows        |  ✅  |  ✅  | `camera_windows` 后端                       |
+| macOS          |  ✅  |  ✅  | `camera`（AVFoundation）                    |
+| Linux          |  ✅  | ⚠️²  | 尚无统一摄像头后端                          |
+| Web / WASM     |  ✅  |  ✅  | getUserMedia + canvas → Rust WASM 解码      |
+| Docker         |  ✅  |  ✅  | Rust `deopti-server` 提供 Web 构建          |
 
 ² Linux 接收页会给出明确提示，建议使用浏览器版本（Docker 容器或任意浏览器）。
 
@@ -130,10 +126,10 @@ cargo install wasm-bindgen-cli --locked --version 0.2.92   # 必须与 rust/Carg
 # 构建
 powershell -File scripts/build-web.ps1 -Release
 
-# 本地预览（内置服务器，带 COOP/COEP 响应头）
-python scripts/serve_web.py 8080
-# 或 Docker 部署
-docker compose up --build
+# 用仓库自带的 Rust 服务器托管（纯 std，无 nginx）
+cargo build --release --manifest-path rust/server/Cargo.toml
+./rust/target/release/deopti-server --root build/web --port 8080
+# 打开 http://localhost:8080
 ```
 
 Rust 核心编译为 `wasm32-unknown-unknown` 并在浏览器中加载（Flutter JavaScript
@@ -141,37 +137,50 @@ UI + Rust WASM）。FRB 桥接以**同步**模式生成（`flutter_rust_bridge.y
 `default_dart_async: false`），因此应用无需 SharedArrayBuffer 或 worker 线程池，
 可运行在任何静态托管上（包括 GitHub Pages）。
 
-内置 `nginx.conf` 发送 `Cross-Origin-Opener-Policy: same-origin` 与
-`Cross-Origin-Embedder-Policy: require-corp`，以便未来重新启用线程化 WASM 构建时
-继续可用、并保留 SharedArrayBuffer 能力。由于当前同步桥接不要求跨域隔离，GitHub
-Pages（`deploy-pages.yml` 工作流）同样可用。
+Rust `deopti-server`（见下一节）发送 `Cross-Origin-Opener-Policy: same-origin`
+与 `Cross-Origin-Embedder-Policy: require-corp`，以便未来重新启用线程化 WASM
+构建时继续可用、并保留 SharedArrayBuffer 能力。由于当前同步桥接不要求跨域隔离，
+GitHub Pages（`deploy-pages.yml` 工作流）同样可用。
 
 > 注意：应用**不**使用 Flutter 实验性的 `--wasm` 渲染器——该模式与 `dart:html`
 > 摄像头/文件后端及 FRB 运行时不兼容。生产 Web 构建为 dart2js + Rust WASM，完全
 > 受支持。
 
+## 用 Rust 托管 Web 构建（无 nginx）
+
+部署由仓库自带的**纯 Rust** 静态服务器（`rust/server`，零第三方依赖、仅 std）
+托管：
+
+```bash
+cargo build --release --manifest-path rust/server/Cargo.toml
+./rust/target/release/deopti-server --root build/web --port 8080
+```
+
+服务器提供 COOP/COEP 隔离响应头、内容哈希资产的不可变缓存、ETag/304 重新验证、
+SPA 回退与严格的路径穿越防护。参数：`--root`、`--host`、`--port`（或
+`DEOPTI_ROOT` / `DEOPTI_HOST` / `DEOPTI_PORT` 环境变量）。
+
 ## GitHub Actions
 
 仓库内置两个工作流（[.github/workflows](.github/workflows)）：
 
-| 工作流 | 运行内容 |
-| --- | --- |
-| `ci.yml` | Rust `fmt --check` + `clippy -D warnings` + `test`；Flutter `analyze` + `test`（先构建原生库）；真实的 `flutter_rust_bridge build-web` + `flutter build web`（上传产物）；`docker build` |
-| `deploy-pages.yml` | 构建 Web/WASM 产物并发布到 GitHub Pages（需在 *Settings → Pages → Source: GitHub Actions* 开启） |
+| 工作流             | 运行内容                                                                                                                                                                                 |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`           | Rust workspace `fmt --check` + `clippy -D warnings` + `test`（库 + 服务器）；Flutter `analyze` + `test`（先构建原生库）；真实的 `flutter_rust_bridge build-web` + `flutter build web`（上传产物）；`docker build` |
+| `deploy-pages.yml` | 构建 Web/WASM 产物并发布到 GitHub Pages（需在 _Settings → Pages → Source: GitHub Actions_ 开启）                                                                                         |
 
 工作流中的每一条命令都与开发者本地执行的命令完全一致，因此绿色流水线是有意义的。
 
 ## Docker
 
 ```bash
-docker compose up --build
+docker build -t deopti-downloader .
+docker run --rm -p 8080:8080 deopti-downloader
 # 打开 http://localhost:8080
 ```
 
-`Dockerfile` 为多阶段构建：安装 Flutter + nightly Rust + wasm-pack + 与
-`Cargo.lock` 匹配的 `wasm-bindgen-cli`，执行 `flutter_rust_bridge build-web
---release` 与 `flutter build web`，最后由 nginx 托管产物（已包含 COOP/COEP
-响应头）。
+`Dockerfile` 为多阶段构建：构建 Flutter Web 产物 + Rust WASM，编译纯 std 的
+`deopti-server`，然后由它托管产物——无 nginx、无第三方服务。
 
 ## 加密（可选）
 
@@ -202,33 +211,32 @@ flutter test integration_test -d <device>     # 设备端 E2E（自检、二维�
 
 ```
 rust/
-  Cargo.toml            # crate: rust_lib_deopti_downloader（deopti_transfer、
-                        #   rustbinary、qrcode、rxing；可选 `encryption`）
+  Cargo.toml            # workspace：FRB 库 + `server/` 成员
   src/api/transfer.rs   # FRB：会话、打包/解包、清单二维码、自检
   src/api/manifest.rs   # rustbinary 会话清单编解码（有界、带版本）
   src/api/qr.rs         # FRB：二维码编解码、版本表、降采样
   src/api/types.rs      # 共享 DTO
+  server/               # deopti-server：纯 std 静态服务器（无 nginx）
 lib/
   main.dart             # 启动引导（Rust 初始化非阻塞、错误可见）
   src/app/              # MaterialApp、M3 主题（Google 字体）、响应式工具
   src/app/widgets/      # ModeCard 等共享 M3 组件
   src/l10n/strings.dart # 中 / 英 UI 文案
   src/core/transfer/    # SenderController、ReceiverController、payload
-  src/core/camera/      # CameraFrameSource + 插件 / Web 后端
+  src/core/camera/      # CameraFrameSource + 插件 / HarmonyOS / Web 后端
   src/core/qr/          # QrPainter / QrDisplay
   src/core/services/    # FileService（io / web）
   src/core/util/        # formatBytes、尽力而为的 ScreenKeep
   src/pages/            # 首页、发送、接收（响应式、带动画）
   src/rust/             # 生成的 FRB 胶水代码（请勿手改）
 .github/workflows/      # ci.yml + deploy-pages.yml
-Dockerfile · nginx.conf · docker-compose.yml · scripts/build-web.ps1
-docs/harmonyos.md
+Dockerfile · scripts/build-web.ps1
 ```
 
 ## 隐私
 
 传输**仅依赖光学**——设备之间不存在任何网络路径。未加密时，发送屏幕上的内容
-可被任何对准它的摄像头读取（这正是设计初衷：*无网络*，而非*保密*）。需要保密
+可被任何对准它的摄像头读取（这正是设计初衷：无网络单向传输，而非**保密**）。需要保密
 时请启用加密。
 
 ## 许可证

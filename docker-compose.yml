@@ -1,6 +1,0 @@
-services:
-  deopti-downloader:
-    build: .
-    ports:
-      - "8080:80"
-    restart: unless-stopped

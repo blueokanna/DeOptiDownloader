@@ -289,11 +289,6 @@ pub fn sender_next_qr(session: &SenderSession) -> Result<SenderFrameQr, String> 
     Ok(SenderFrameQr { frame, qr })
 }
 
-/// Generate the QR for arbitrary bytes (used for the session helper QR).
-pub fn qr_encode_frame(bytes: Vec<u8>) -> Result<QrMatrix, String> {
-    qr_encode(&bytes)
-}
-
 /// Build the session-manifest QR for a live sending session.
 ///
 /// This is the *first* QR a receiver should scan: it carries the file name,

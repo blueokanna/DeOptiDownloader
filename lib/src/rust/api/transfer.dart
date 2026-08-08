@@ -117,10 +117,6 @@ SenderFrame senderNext({required SenderSession session}) =>
 SenderFrameQr senderNextQr({required SenderSession session}) =>
     RustLib.instance.api.crateApiTransferSenderNextQr(session: session);
 
-/// Generate the QR for arbitrary bytes (used for the session helper QR).
-QrMatrix qrEncodeFrame({required List<int> bytes}) =>
-    RustLib.instance.api.crateApiTransferQrEncodeFrame(bytes: bytes);
-
 /// Build the session-manifest QR for a live sending session.
 ///
 /// This is the *first* QR a receiver should scan: it carries the file name,

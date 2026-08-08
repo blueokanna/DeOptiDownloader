@@ -105,15 +105,12 @@ layer only adapts them to the bridge.
 | --------------- | :--: | :-----: | ------------------------------------------------ |
 | Android         | ✅   | ✅      | `camera` (CameraX) YUV420 image stream           |
 | iOS             | ✅   | ✅      | `camera` (AVFoundation) YUV420 image stream      |
-| HarmonyOS Next  | ✅   | ✅¹     | see [docs/harmonyos.md](docs/harmonyos.md)       |
+| HarmonyOS Next  | ✅   | ✅      | native `HarmonyCameraSource` (YUV420 + BGRA)     |
 | Windows         | ✅   | ✅      | `camera_windows` backend                         |
 | macOS           | ✅   | ✅      | `camera` (AVFoundation)                          |
 | Linux           | ✅   | ⚠️²     | no federated camera backend yet                  |
 | Web / WASM      | ✅   | ✅      | getUserMedia + canvas → Rust WASM decode         |
-| Docker          | ✅   | ✅      | serves the Web build (see below)                 |
-
-¹ HarmonyOS requires adding a camera backend that implements
-`CameraFrameSource` (a few dozen lines) — the app layer is platform-agnostic.
+| Docker          | ✅   | ✅      | Rust `deopti-server` serves the Web build        |
 
 ² On Linux the receive page shows a clear message and suggests the browser
 build (the Docker container or any browser).
@@ -149,22 +146,37 @@ cargo install wasm-bindgen-cli --locked --version 0.2.92   # must match rust/Car
 # Build
 powershell -File scripts/build-web.ps1 -Release
 
-# Serve locally with COOP/COEP headers (bundled server)
-python scripts/serve_web.py 8080
-# or deploy with Docker
-docker compose up --build
+# Serve with the repository's own Rust server (std-only, no nginx)
+cargo build --release --manifest-path rust/server/Cargo.toml
+./rust/target/release/deopti-server --root build/web --port 8080
+# open http://localhost:8080
 ```
 
-The bundled `nginx.conf` sends `Cross-Origin-Opener-Policy: same-origin` and
-`Cross-Origin-Embedder-Policy: require-corp` so a future threaded WASM build
-keeps working and SharedArrayBuffer stays available. GitHub Pages works too
-(the `deploy-pages.yml` workflow), because the current synchronous bridge does
-not require cross-origin isolation.
+The Rust `deopti-server` (see next section) sends `Cross-Origin-Opener-Policy:
+same-origin` and `Cross-Origin-Embedder-Policy: require-corp` so a future
+threaded WASM build keeps working and SharedArrayBuffer stays available.
+GitHub Pages works too (the `deploy-pages.yml` workflow), because the current
+synchronous bridge does not require cross-origin isolation.
 
 > Note: the app is **not** built with Flutter's experimental `--wasm`
 > renderer — that mode is incompatible with the `dart:html` camera/file
 > backends and the FRB runtime. The production Web build is dart2js + Rust
 > WASM, which is fully supported.
+
+## Serving the Web build (Rust, no nginx)
+
+Deployment is served by the repository's own **Rust** static server
+(`rust/server`, zero third-party dependencies, std only):
+
+```bash
+cargo build --release --manifest-path rust/server/Cargo.toml
+./rust/target/release/deopti-server --root build/web --port 8080
+```
+
+The server sends COOP/COEP isolation headers, immutable caching for
+content-hashed assets, ETag/304 revalidation, SPA fallback and strict
+path-traversal protection. Options: `--root`, `--host`, `--port` (or the
+`DEOPTI_ROOT` / `DEOPTI_HOST` / `DEOPTI_PORT` env vars).
 
 ## GitHub Actions
 
@@ -172,7 +184,7 @@ Two workflows ship in [.github/workflows](.github/workflows):
 
 | Workflow | What it runs |
 | --- | --- |
-| `ci.yml` | Rust `fmt --check` + `clippy -D warnings` + `test`; Flutter `analyze` + `test` (native lib built first); a real `flutter_rust_bridge build-web` + `flutter build web` (bundle uploaded as artifact); `docker build` |
+| `ci.yml` | Rust workspace `fmt --check` + `clippy -D warnings` + `test` (lib + server); Flutter `analyze` + `test` (native lib built first); a real `flutter_rust_bridge build-web` + `flutter build web` (bundle uploaded as artifact); `docker build` |
 | `deploy-pages.yml` | Builds the Web/WASM bundle and publishes it to GitHub Pages (enable *Settings → Pages → Source: GitHub Actions*) |
 
 Every command in the workflows is the exact command developers run locally, so
@@ -181,13 +193,14 @@ a green pipeline is meaningful.
 ## Docker
 
 ```bash
-docker compose up --build
+docker build -t deopti-downloader .
+docker run --rm -p 8080:8080 deopti-downloader
 # open http://localhost:8080
 ```
 
-`Dockerfile` is multi-stage: it installs Flutter + nightly Rust + wasm-pack,
-runs `flutter_rust_bridge build-web --release` and `flutter build web`, then
-serves the bundle with nginx (COOP/COEP headers included).
+`Dockerfile` is multi-stage: it builds the Flutter Web bundle + Rust WASM,
+compiles the std-only `deopti-server`, then serves the bundle with it — no
+nginx, no third-party service.
 
 ## Encryption (opt-in)
 
@@ -220,27 +233,26 @@ flutter test integration_test -d <device>     # device E2E (self-test, QR round 
 
 ```
 rust/
-  Cargo.toml            # crate: rust_lib_deopti_downloader (deopti_transfer,
-                        #   rustbinary, qrcode, rxing; optional `encryption`)
+  Cargo.toml            # workspace: FRB lib + `server/` member
   src/api/transfer.rs   # FRB: sessions, pack/unpack, manifest QR, self-test
   src/api/manifest.rs   # rustbinary session-manifest codec (bounded, versioned)
   src/api/qr.rs         # FRB: QR encode/decode, version table, downscale
   src/api/types.rs      # shared DTOs
+  server/               # deopti-server: std-only static server (no nginx)
 lib/
   main.dart             # bootstrap (Rust init is non-blocking, errors surfaced)
   src/app/              # MaterialApp, M3 theme (Google Fonts), responsive utils
   src/app/widgets/      # ModeCard and shared M3 widgets
   src/l10n/strings.dart # zh / en UI strings
   src/core/transfer/    # SenderController, ReceiverController, payload
-  src/core/camera/      # CameraFrameSource + plugin / web backends
+  src/core/camera/      # CameraFrameSource + plugin / HarmonyOS / web backends
   src/core/qr/          # QrPainter / QrDisplay
   src/core/services/    # FileService (io / web)
   src/core/util/        # formatBytes, best-effort ScreenKeep
   src/pages/            # Home, Send, Receive (responsive, animated)
   src/rust/             # generated FRB glue (do not edit)
 .github/workflows/      # ci.yml + deploy-pages.yml
-Dockerfile · nginx.conf · docker-compose.yml · scripts/build-web.ps1
-docs/harmonyos.md
+Dockerfile · scripts/build-web.ps1
 ```
 
 ## Privacy
