@@ -34,6 +34,10 @@ Rust 核心 + Flutter 跨端实现，支持发送/接收文件与文本片段。
 - **QR layer tuned for streaming** — ECC level L, smallest fitting version,
   and a downscale-then-decode pipeline in Rust for fast, stable camera
   decoding.
+- **Non-blocking native pipeline** — fountain/QR encoding and camera-frame QR
+  decoding run on Rust bridge workers instead of Flutter's UI isolate. The
+  receiver applies stream backpressure while a frame is being decoded, so
+  stale camera frames are dropped rather than copied and queued.
 - **Optional end-to-end encryption (deopti_transfer 0.1.2)** — XChaCha20-
   Poly1305 with a password-derived key, **and** judge-recoverable transfer
   (JRC): a sender commits against a designated judge's public key, so any
@@ -115,6 +119,23 @@ The **cargo** crate is `rust_lib_scan_downloader`; the bridge glue lives in
 `deopti_transfer`; `rustbinary` is genuinely used to encode the compact,
 bounded session-manifest payload (see `rust/src/api/manifest.rs`); the app
 layer only adapts them to the bridge.
+
+## Performance and hardware acceleration
+
+The sender targets the configured frame rate (60 fps by default), but actual
+throughput depends on the device SoC, display refresh rate, selected QR payload
+size and thermal state. Each native QR frame is generated asynchronously on a
+Rust worker. Flutter only publishes the newest matrix, and `QrDisplay` submits
+all dark modules to the renderer in one `drawRawPoints` batch without
+anti-aliasing or rebuilding the widget tree per frame.
+
+On Android, Flutter uses Impeller and the activity has hardware acceleration
+enabled; CameraX renders its preview through a GPU-backed texture. GPU
+acceleration therefore covers QR rasterization, composition and camera
+preview. Fountain coding, QR construction and `rxing` recognition remain CPU
+work on background Rust workers. The receiver requests `ResolutionPreset.high`,
+processes at most 20 camera frames per second, and pauses capture conversion
+while decoding so work cannot accumulate behind the current frame.
 
 ## Appearance: themes, wallpaper & i18n
 

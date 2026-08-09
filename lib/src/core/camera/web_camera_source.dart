@@ -14,6 +14,7 @@ import 'package:flutter/widgets.dart';
 
 import 'camera_frame_source.dart';
 import 'luma_frame.dart';
+
 class WebCameraSource implements CameraFrameSource {
   WebCameraSource({this.captureFramesPerSecond = 15});
 
@@ -63,15 +64,24 @@ class WebCameraSource implements CameraFrameSource {
     _video = video;
     _frames = StreamController<LumaFrame>();
     _viewId = 'deopti-camera-${DateTime.now().microsecondsSinceEpoch}';
-    ui_web.platformViewRegistry.registerViewFactory(_viewId!, (int id) => video);
+    ui_web.platformViewRegistry.registerViewFactory(
+      _viewId!,
+      (int id) => video,
+    );
     final canvas = html.CanvasElement();
     _canvas = canvas;
     _ctx = canvas.context2D;
-    final interval = Duration(milliseconds: (1000 / captureFramesPerSecond).round());
+    final interval = Duration(
+      milliseconds: (1000 / captureFramesPerSecond).round(),
+    );
     _timer = Timer.periodic(interval, (_) => _capture());
   }
 
   void _capture() {
+    final frames = _frames;
+    if (frames == null || frames.isClosed || frames.isPaused) {
+      return;
+    }
     final video = _video;
     final ctx = _ctx;
     final canvas = _canvas;
@@ -88,8 +98,14 @@ class WebCameraSource implements CameraFrameSource {
     ctx.drawImage(video, 0, 0);
     final rgba = ctx.getImageData(0, 0, w, h).data;
     final bytes = Uint8List.fromList(rgba);
-    _frames?.add(
-      LumaFrame(data: bytes, width: w, height: h, rgba: true, timestamp: DateTime.now()),
+    frames.add(
+      LumaFrame(
+        data: bytes,
+        width: w,
+        height: h,
+        rgba: true,
+        timestamp: DateTime.now(),
+      ),
     );
   }
 
@@ -99,10 +115,7 @@ class WebCameraSource implements CameraFrameSource {
     if (viewId == null) {
       return const SizedBox.shrink();
     }
-    return HtmlElementView(
-      viewType: viewId,
-      key: ValueKey(viewId),
-    );
+    return HtmlElementView(viewType: viewId, key: ValueKey(viewId));
   }
 
   @override

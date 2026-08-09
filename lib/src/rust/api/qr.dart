@@ -19,7 +19,7 @@ QrMatrix qrEncode({required List<int> data}) =>
     RustLib.instance.api.crateApiQrQrEncode(data: data);
 
 /// Decode a QR from a tight grayscale (luma8) buffer, optionally downscaled.
-Uint8List? qrDecodeGray({
+Future<Uint8List?> qrDecodeGray({
   required List<int> gray,
   required int width,
   required int height,
@@ -32,7 +32,7 @@ Uint8List? qrDecodeGray({
 );
 
 /// Decode a QR from an RGBA buffer, extracting luminance first.
-Uint8List? qrDecodeRgba({
+Future<Uint8List?> qrDecodeRgba({
   required List<int> rgba,
   required int width,
   required int height,

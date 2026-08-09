@@ -40,7 +40,10 @@ class PluginCameraSource implements CameraFrameSource {
     );
     final controller = CameraController(
       camera,
-      ResolutionPreset.veryHigh,
+      // Keep the analysis stream near 1280x720. The preview is a GPU texture;
+      // veryHigh only multiplies luma copies and decoder work without adding
+      // useful module detail at the configured 1280px Rust scan bound.
+      ResolutionPreset.high,
       enableAudio: false,
       imageFormatGroup: _preferredImageFormat,
     );
@@ -57,6 +60,10 @@ class PluginCameraSource implements CameraFrameSource {
   };
 
   void _onImage(CameraImage image) {
+    final frames = _frames;
+    if (frames == null || frames.isClosed || frames.isPaused) {
+      return;
+    }
     final now = DateTime.now();
     final interval = Duration(
       microseconds: (1000000 / maxFramesPerSecond).round(),
@@ -69,7 +76,7 @@ class PluginCameraSource implements CameraFrameSource {
       return;
     }
     _lastEmit = now;
-    _frames?.add(frame);
+    frames.add(frame);
   }
 
   @override

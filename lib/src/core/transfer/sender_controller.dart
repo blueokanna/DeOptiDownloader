@@ -70,6 +70,8 @@ class SenderController extends ChangeNotifier {
   int _framesSent = 0;
   int _pendingTicks = 0;
   bool _draining = false;
+  bool _disposed = false;
+  int _generation = 0;
   Timer? _timer;
   Timer? _setupTimer;
   final Stopwatch _clock = Stopwatch();
@@ -94,13 +96,18 @@ class SenderController extends ChangeNotifier {
     if (_running) {
       return;
     }
+    _generation++;
     _running = true;
     _inSetup = true;
     _paused = false;
     matrix.value = setupQr;
     notifyListeners();
     _setupTimer?.cancel();
+    final generation = _generation;
     _setupTimer = Timer(hold, () {
+      if (_disposed || !_running || generation != _generation) {
+        return;
+      }
       _setupTimer = null;
       _inSetup = false;
       _framesSent = 0;
@@ -117,6 +124,7 @@ class SenderController extends ChangeNotifier {
     if (_running) {
       return;
     }
+    _generation++;
     _running = true;
     _paused = false;
     _framesSent = 0;
@@ -142,6 +150,7 @@ class SenderController extends ChangeNotifier {
   }
 
   void stop() {
+    _generation++;
     _setupTimer?.cancel();
     _setupTimer = null;
     _timer?.cancel();
@@ -183,13 +192,20 @@ class SenderController extends ChangeNotifier {
   }
 
   Future<void> _emitOnce() async {
+    final generation = _generation;
     try {
-      final frame = senderNextQr(session: session);
+      final frame = await senderNextQr(session: session);
+      if (_disposed || !_running || _paused || generation != _generation) {
+        return;
+      }
       _framesSent++;
       _frameTimestamps.add(_clock.elapsed);
       matrix.value = frame.qr;
       _maybePublishStats();
     } catch (e) {
+      if (_disposed || generation != _generation) {
+        return;
+      }
       stats.value = stats.value.copyWith(error: e.toString());
       stop();
     }
@@ -224,6 +240,10 @@ class SenderController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    _generation++;
+    _running = false;
+    _pendingTicks = 0;
     _setupTimer?.cancel();
     _timer?.cancel();
     matrix.dispose();

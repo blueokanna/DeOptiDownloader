@@ -421,6 +421,7 @@ pub fn sender_next(session: &SenderSession) -> Result<SenderFrame, String> {
 }
 
 /// Emit the next frame together with its QR matrix in one bridge call.
+#[flutter_rust_bridge::frb(dart_async)]
 pub fn sender_next_qr(session: &SenderSession) -> Result<SenderFrameQr, String> {
     let frame = sender_next(session)?;
     let qr = qr_encode(&frame.bytes)?;

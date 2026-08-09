@@ -128,14 +128,14 @@ abstract class RustLibApi extends BaseApi {
     required List<int> judgePublicKey,
   });
 
-  Uint8List? crateApiQrQrDecodeGray({
+  Future<Uint8List?> crateApiQrQrDecodeGray({
     required List<int> gray,
     required int width,
     required int height,
     int? maxScanDim,
   });
 
-  Uint8List? crateApiQrQrDecodeRgba({
+  Future<Uint8List?> crateApiQrQrDecodeRgba({
     required List<int> rgba,
     required int width,
     required int height,
@@ -169,7 +169,9 @@ abstract class RustLibApi extends BaseApi {
 
   SenderFrame crateApiTransferSenderNext({required SenderSession session});
 
-  SenderFrameQr crateApiTransferSenderNextQr({required SenderSession session});
+  Future<SenderFrameQr> crateApiTransferSenderNextQr({
+    required SenderSession session,
+  });
 
   Uint8List crateApiTransferSessionManifestBytes({
     required SenderSession session,
@@ -604,21 +606,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Uint8List? crateApiQrQrDecodeGray({
+  Future<Uint8List?> crateApiQrQrDecodeGray({
     required List<int> gray,
     required int width,
     required int height,
     int? maxScanDim,
   }) {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_8_loose(gray, serializer);
           sse_encode_u_32(width, serializer);
           sse_encode_u_32(height, serializer);
           sse_encode_opt_box_autoadd_u_32(maxScanDim, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 16,
+            port: port_,
+          );
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_list_prim_u_8_strict,
@@ -637,21 +644,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Uint8List? crateApiQrQrDecodeRgba({
+  Future<Uint8List?> crateApiQrQrDecodeRgba({
     required List<int> rgba,
     required int width,
     required int height,
     int? maxScanDim,
   }) {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_8_loose(rgba, serializer);
           sse_encode_u_32(width, serializer);
           sse_encode_u_32(height, serializer);
           sse_encode_opt_box_autoadd_u_32(maxScanDim, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 17)!;
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 17,
+            port: port_,
+          );
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_list_prim_u_8_strict,
@@ -909,16 +921,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "sender_next", argNames: ["session"]);
 
   @override
-  SenderFrameQr crateApiTransferSenderNextQr({required SenderSession session}) {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
+  Future<SenderFrameQr> crateApiTransferSenderNextQr({
+    required SenderSession session,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderSession(
             session,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27)!;
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 27,
+            port: port_,
+          );
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_sender_frame_qr,

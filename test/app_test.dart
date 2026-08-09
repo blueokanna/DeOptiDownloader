@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -62,6 +63,30 @@ void main() {
     final customPaint = tester.widget<CustomPaint>(customPaintFinder);
     final painter = customPaint.painter! as QrPainter;
     expect(painter.quietZoneModules, 4);
+  });
+
+  test('QR generation runs asynchronously off the Dart UI isolate', () async {
+    final packed = packFileFfi(
+      name: 'async.txt',
+      mimeType: 'text/plain',
+      bytes: Uint8List.fromList(utf8.encode('background QR generation')),
+    );
+    final session = senderCreate(
+      container: packed.container,
+      frameBytes: defaultFrameSize(),
+      sessionId: 0x60f0,
+    );
+
+    var eventLoopAdvanced = false;
+    final future = senderNextQr(session: session);
+    Timer.run(() => eventLoopAdvanced = true);
+    expect(future, isA<Future<SenderFrameQr>>());
+    final result = await future;
+    await Future<void>.delayed(Duration.zero);
+
+    expect(eventLoopAdvanced, isTrue);
+    expect(result.qr.width, greaterThan(0));
+    expect(result.qr.cells.length, result.qr.width * result.qr.height);
   });
 
   test(

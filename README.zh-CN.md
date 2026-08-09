@@ -26,6 +26,9 @@ English version: [README.md](README.md)。
   `rustbinary` 二进制编解码器编码（见 `rust/src/api/manifest.rs`）。
 - **为流式传输调优的二维码层** —— 纠错级别 L、最小适配版本、Rust 内先降采样
   再解码，保证快速稳定的摄像头解码。
+- **不阻塞界面的原生流水线** —— 喷泉码/二维码编码和摄像头帧解码均在 Rust 桥接
+  工作线程执行，不占用 Flutter UI isolate。接收端在解码期间对图像流施加背压，
+  直接丢弃过期摄像头帧，不再持续复制和排队。
 - **可选端到端加密（deopti_transfer 0.1.2）** —— XChaCha20-Poly1305 + 口令
   派生密钥；**以及法官可恢复传输（JRC）**：发送方针对指定法官的公钥提交承诺，
   任何摄像头只能看到隐藏承诺与密文，只有持有匹配私钥的法官才能恢复文件。两者
@@ -100,6 +103,19 @@ Rust crate 名为 `rust_lib_scan_downloader`；桥接胶水代码位于
 `lib/src/rust/`（自动生成）。所有协议逻辑都在 `deopti_transfer` 中；
 `rustbinary` 被真实用于编码紧凑、有界的会话清单负载（见
 `rust/src/api/manifest.rs`）；应用层只负责适配桥接。
+
+## 性能与硬件加速
+
+发送端以配置的帧率为目标（默认 60 fps），但实际吞吐受设备 SoC、屏幕刷新率、
+二维码负载大小和温控状态限制。原生端的每一帧二维码均在 Rust 工作线程异步生成；
+Flutter 只发布最新矩阵，`QrDisplay` 使用一次 `drawRawPoints` 批量提交全部深色模块，
+关闭抗锯齿，并避免每帧重建组件树。
+
+Android 端启用 Flutter Impeller 和 Activity 硬件加速，CameraX 通过 GPU 纹理渲染
+预览。因此 GPU 负责二维码栅格绘制、界面合成和相机预览；喷泉编码、二维码构造与
+`rxing` 识别仍是在 Rust 后台工作线程执行的 CPU 任务。接收端使用
+`ResolutionPreset.high`，最多分析每秒 20 个摄像头帧，并在解码期间暂停采集转换，
+避免旧帧在当前帧后方堆积。
 
 ## 外观：主题、壁纸与 i18n
 

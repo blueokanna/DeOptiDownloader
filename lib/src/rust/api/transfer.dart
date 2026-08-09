@@ -158,7 +158,7 @@ SenderFrame senderNext({required SenderSession session}) =>
     RustLib.instance.api.crateApiTransferSenderNext(session: session);
 
 /// Emit the next frame together with its QR matrix in one bridge call.
-SenderFrameQr senderNextQr({required SenderSession session}) =>
+Future<SenderFrameQr> senderNextQr({required SenderSession session}) =>
     RustLib.instance.api.crateApiTransferSenderNextQr(session: session);
 
 /// Build the session-manifest QR for a live sending session.

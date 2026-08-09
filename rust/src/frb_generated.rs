@@ -516,15 +516,16 @@ fn wire__crate__api__transfer__pack_file_jrc_ffi_impl(
     )
 }
 fn wire__crate__api__qr__qr_decode_gray_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "qr_decode_gray",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -541,28 +542,31 @@ fn wire__crate__api__qr__qr_decode_gray_impl(
             let api_height = <u32>::sse_decode(&mut deserializer);
             let api_max_scan_dim = <Option<u32>>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
-                let output_ok = crate::api::qr::qr_decode_gray(
-                    api_gray,
-                    api_width,
-                    api_height,
-                    api_max_scan_dim,
-                )?;
-                Ok(output_ok)
-            })())
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::qr::qr_decode_gray(
+                        api_gray,
+                        api_width,
+                        api_height,
+                        api_max_scan_dim,
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
         },
     )
 }
 fn wire__crate__api__qr__qr_decode_rgba_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "qr_decode_rgba",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -579,15 +583,17 @@ fn wire__crate__api__qr__qr_decode_rgba_impl(
             let api_height = <u32>::sse_decode(&mut deserializer);
             let api_max_scan_dim = <Option<u32>>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
-                let output_ok = crate::api::qr::qr_decode_rgba(
-                    api_rgba,
-                    api_width,
-                    api_height,
-                    api_max_scan_dim,
-                )?;
-                Ok(output_ok)
-            })())
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::qr::qr_decode_rgba(
+                        api_rgba,
+                        api_width,
+                        api_height,
+                        api_max_scan_dim,
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
         },
     )
 }
@@ -943,15 +949,16 @@ fn wire__crate__api__transfer__sender_next_impl(
     )
 }
 fn wire__crate__api__transfer__sender_next_qr_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "sender_next_qr",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -967,26 +974,28 @@ fn wire__crate__api__transfer__sender_next_qr_impl(
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<SenderSession>,
             >>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, String>((move || {
-                let mut api_session_guard = None;
-                let decode_indices_ =
-                    flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
-                        flutter_rust_bridge::for_generated::LockableOrderInfo::new(
-                            &api_session,
-                            0,
-                            false,
-                        ),
-                    ]);
-                for i in decode_indices_ {
-                    match i {
-                        0 => api_session_guard = Some(api_session.lockable_decode_sync_ref()),
-                        _ => unreachable!(),
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let mut api_session_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_session,
+                                0,
+                                false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_session_guard = Some(api_session.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
                     }
-                }
-                let api_session_guard = api_session_guard.unwrap();
-                let output_ok = crate::api::transfer::sender_next_qr(&*api_session_guard)?;
-                Ok(output_ok)
-            })())
+                    let api_session_guard = api_session_guard.unwrap();
+                    let output_ok = crate::api::transfer::sender_next_qr(&*api_session_guard)?;
+                    Ok(output_ok)
+                })())
+            }
         },
     )
 }
@@ -1697,6 +1706,9 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
+        16 => wire__crate__api__qr__qr_decode_gray_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__qr__qr_decode_rgba_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__transfer__sender_next_qr_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1724,8 +1736,6 @@ fn pde_ffi_dispatcher_sync_impl(
         13 => wire__crate__api__transfer__pack_file_encrypted_ffi_impl(ptr, rust_vec_len, data_len),
         14 => wire__crate__api__transfer__pack_file_ffi_impl(ptr, rust_vec_len, data_len),
         15 => wire__crate__api__transfer__pack_file_jrc_ffi_impl(ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__qr__qr_decode_gray_impl(ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__qr__qr_decode_rgba_impl(ptr, rust_vec_len, data_len),
         18 => wire__crate__api__qr__qr_encode_impl(ptr, rust_vec_len, data_len),
         19 => wire__crate__api__qr__qr_version_for_impl(ptr, rust_vec_len, data_len),
         20 => wire__crate__api__transfer__receiver_create_impl(ptr, rust_vec_len, data_len),
@@ -1735,7 +1745,6 @@ fn pde_ffi_dispatcher_sync_impl(
         24 => wire__crate__api__transfer__sender_create_impl(ptr, rust_vec_len, data_len),
         25 => wire__crate__api__transfer__sender_info_impl(ptr, rust_vec_len, data_len),
         26 => wire__crate__api__transfer__sender_next_impl(ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__transfer__sender_next_qr_impl(ptr, rust_vec_len, data_len),
         28 => wire__crate__api__transfer__session_manifest_bytes_impl(ptr, rust_vec_len, data_len),
         29 => wire__crate__api__transfer__session_manifest_qr_impl(ptr, rust_vec_len, data_len),
         30 => wire__crate__api__transfer__smallest_sufficient_frame_size_for_impl(

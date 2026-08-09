@@ -61,6 +61,7 @@ pub fn qr_encode(data: &[u8]) -> Result<QrMatrix, String> {
 }
 
 /// Decode a QR from a tight grayscale (luma8) buffer, optionally downscaled.
+#[flutter_rust_bridge::frb(dart_async)]
 pub fn qr_decode_gray(
     gray: Vec<u8>,
     width: u32,
@@ -83,6 +84,7 @@ pub fn qr_decode_gray(
 }
 
 /// Decode a QR from an RGBA buffer, extracting luminance first.
+#[flutter_rust_bridge::frb(dart_async)]
 pub fn qr_decode_rgba(
     rgba: Vec<u8>,
     width: u32,

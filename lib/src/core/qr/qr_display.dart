@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -15,20 +16,20 @@ class QrPainter extends CustomPainter {
     required this.dark,
     required this.light,
     this.quietZoneModules = 4,
-    super.repaint,
-  });
+  }) : super(repaint: matrix);
 
-  final QrMatrix matrix;
+  final ValueListenable<QrMatrix?> matrix;
   final Color dark;
   final Color light;
   final int quietZoneModules;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final w = matrix.width;
-    if (w == 0) {
+    final value = matrix.value;
+    if (value == null || value.width == 0) {
       return;
     }
+    final w = value.width;
     canvas.drawRect(Offset.zero & size, Paint()..color = light);
 
     final totalModules = w + quietZoneModules * 2;
@@ -36,34 +37,26 @@ class QrPainter extends CustomPainter {
     final qrExtent = totalModules * cell;
     final left = (size.width - qrExtent) / 2 + quietZoneModules * cell;
     final top = (size.height - qrExtent) / 2 + quietZoneModules * cell;
-    final cells = matrix.cells;
-    final path = Path();
+    final cells = value.cells;
+    final points = Float32List(cells.length * 2);
+    var pointOffset = 0;
     for (var y = 0; y < w; y++) {
-      var x = 0;
       final rowBase = y * w;
-      while (x < w) {
+      for (var x = 0; x < w; x++) {
         if (cells[rowBase + x] == 1) {
-          var run = 1;
-          while (x + run < w && cells[rowBase + x + run] == 1) {
-            run++;
-          }
-          final moduleLeft = left + x * cell;
-          final moduleTop = top + y * cell;
-          // +0.6 overlaps one device pixel to hide sub-pixel seams.
-          path.addRect(
-            Rect.fromLTWH(moduleLeft, moduleTop, run * cell + 0.6, cell + 0.6),
-          );
-          x += run;
-        } else {
-          x++;
+          points[pointOffset++] = left + (x + 0.5) * cell;
+          points[pointOffset++] = top + (y + 0.5) * cell;
         }
       }
     }
-    canvas.drawPath(
-      path,
+    canvas.drawRawPoints(
+      ui.PointMode.points,
+      Float32List.sublistView(points, 0, pointOffset),
       Paint()
         ..color = dark
-        ..isAntiAlias = false,
+        ..isAntiAlias = false
+        ..strokeCap = StrokeCap.square
+        ..strokeWidth = cell + 0.5,
     );
   }
 
@@ -93,29 +86,21 @@ class QrDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<QrMatrix?>(
-      valueListenable: matrix,
-      builder: (context, value, _) {
-        if (value == null) {
-          return const SizedBox.shrink();
-        }
-        return Center(
-          child: AspectRatio(
-            aspectRatio: 1,
-            child: RepaintBoundary(
-              child: CustomPaint(
-                painter: QrPainter(
-                  matrix: value,
-                  dark: dark,
-                  light: light,
-                  quietZoneModules: quietZoneModules,
-                ),
-                child: const SizedBox.expand(),
-              ),
+    return Center(
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: RepaintBoundary(
+          child: CustomPaint(
+            painter: QrPainter(
+              matrix: matrix,
+              dark: dark,
+              light: light,
+              quietZoneModules: quietZoneModules,
             ),
+            child: const SizedBox.expand(),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

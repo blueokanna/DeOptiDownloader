@@ -37,6 +37,8 @@ class ReceiverController extends ChangeNotifier {
   Timer? _signalTimer;
 
   bool _decoding = false;
+  bool _disposed = false;
+  int _generation = 0;
   DateTime _lastDecodeAt = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _startedAt = DateTime.now();
   DateTime? _lastSignalAt;
@@ -109,30 +111,37 @@ class ReceiverController extends ChangeNotifier {
   }
 
   Future<void> _onFrame(LumaFrame frame) async {
-    // Throttle decode to ~15 fps and never run two decodes concurrently.
+    // Match the camera analysis stream at up to 20 fps. Slow decodes apply
+    // natural backpressure because only one Rust worker request may be active.
     if (_decoding) {
       return;
     }
-    final interval = const Duration(milliseconds: 66);
+    final interval = const Duration(milliseconds: 50);
     if (frame.timestamp.difference(_lastDecodeAt) < interval) {
       return;
     }
+    final subscription = _sub;
+    final generation = _generation;
+    subscription?.pause();
     _decoding = true;
     _lastDecodeAt = frame.timestamp;
     try {
       final Uint8List? bytes;
       if (frame.rgba) {
-        bytes = qr.qrDecodeRgba(
+        bytes = await qr.qrDecodeRgba(
           rgba: frame.data,
           width: frame.width,
           height: frame.height,
         );
       } else {
-        bytes = qr.qrDecodeGray(
+        bytes = await qr.qrDecodeGray(
           gray: frame.data,
           width: frame.width,
           height: frame.height,
         );
+      }
+      if (_disposed || generation != _generation) {
+        return;
       }
       if (bytes == null) {
         return;
@@ -160,10 +169,18 @@ class ReceiverController extends ChangeNotifier {
       }
       notifyListeners();
     } catch (e) {
+      if (_disposed || generation != _generation) {
+        return;
+      }
       error = e.toString();
       notifyListeners();
     } finally {
-      _decoding = false;
+      if (generation == _generation) {
+        _decoding = false;
+        if (!_disposed && identical(_sub, subscription)) {
+          subscription?.resume();
+        }
+      }
     }
   }
 
@@ -257,6 +274,8 @@ class ReceiverController extends ChangeNotifier {
 
   /// Stops the camera and resets receiver state for another transfer.
   Future<void> reset() async {
+    _generation++;
+    _decoding = false;
     await _sub?.cancel();
     _sub = null;
     _signalTimer?.cancel();
@@ -289,7 +308,10 @@ class ReceiverController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    _generation++;
     _sub?.cancel();
+    _sub = null;
     _signalTimer?.cancel();
     source?.dispose();
     super.dispose();

@@ -64,6 +64,10 @@ class HarmonyCameraSource implements CameraFrameSource {
   }
 
   void _onImage(CameraImage image) {
+    final frames = _frames;
+    if (frames == null || frames.isClosed || frames.isPaused) {
+      return;
+    }
     final now = DateTime.now();
     final interval = Duration(
       microseconds: (1000000 / maxFramesPerSecond).round(),
@@ -78,7 +82,7 @@ class HarmonyCameraSource implements CameraFrameSource {
     }
 
     _lastEmit = now;
-    _frames?.add(frame);
+    frames.add(frame);
   }
 
   @override
