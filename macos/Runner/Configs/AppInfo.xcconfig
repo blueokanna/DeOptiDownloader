@@ -8,7 +8,7 @@
 PRODUCT_NAME = scan_downloader
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.scanDownloader
+PRODUCT_BUNDLE_IDENTIFIER = com.deopti.downloader
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.example. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 DeOptiDownloader. All rights reserved.

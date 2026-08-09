@@ -41,6 +41,8 @@ app.*.map.json
 
 # Rust build artifacts
 /rust/target/
+# Cargokit build-tool marker (created by the Android build)
+/rust/build/
 
 # flutter_rust_bridge web output (generated, built by `build-web`)
 /web/pkg/

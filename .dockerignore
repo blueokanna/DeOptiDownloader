@@ -10,7 +10,6 @@ macos/
 windows/
 ohos/
 integration_test/
-test_driver/
 rust/target/
 web/pkg/
 *.dll

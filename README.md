@@ -206,6 +206,20 @@ flutter pub get
 flutter run            # pick a connected device
 ```
 
+### Android build requirements
+
+The Android build is pinned to **AGP 8.13 + Gradle 8.14.3** (`android/settings.gradle.kts`
+and `android/gradle/wrapper/gradle-wrapper.properties`). AGP 9's built-in Kotlin is
+currently incompatible with this plugin mix — `file_picker` 11.x conditionally skips
+the Kotlin Gradle Plugin under AGP 9 (expecting built-in Kotlin), while
+`camera_android_camerax`, `share_plus`, `wakelock_plus` and `package_info_plus` still
+require classic KGP — so the project stays on AGP 8.x where every plugin compiles
+through classic KGP. `android/gradle.properties` also sets `kotlin.incremental=false`
+to avoid a known Windows Kotlin incremental-cache failure, and
+`rust_builder/cargokit/gradle/plugin.gradle` was patched to use Gradle's `ExecOperations`
+(Gradle 9 removed `Project.exec(Closure)`). The application id is
+`com.deopti.downloader`.
+
 ## Web / WASM
 
 The Rust core is compiled to `wasm32-unknown-unknown` and loaded through the

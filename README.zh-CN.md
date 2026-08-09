@@ -180,6 +180,18 @@ flutter pub get
 flutter run            # 选择连接的设备
 ```
 
+### Android 构建要求
+
+Android 构建固定为 **AGP 8.13 + Gradle 8.14.3**（见 `android/settings.gradle.kts`
+与 `android/gradle/wrapper/gradle-wrapper.properties`）。AGP 9 的内置 Kotlin 与当前
+插件组合不兼容——`file_picker` 11.x 在 AGP 9 下会条件性跳过 Kotlin Gradle 插件（依赖
+内置 Kotlin），而 `camera_android_camerax`、`share_plus`、`wakelock_plus`、
+`package_info_plus` 仍强制使用经典 KGP——因此项目保持在 AGP 8.x，使所有插件都能
+通过经典 KGP 编译。`android/gradle.properties` 还设置了 `kotlin.incremental=false`
+以避免 Windows 上已知的 Kotlin 增量缓存故障；`rust_builder/cargokit/gradle/plugin.gradle`
+已改用 Gradle 的 `ExecOperations`（Gradle 9 移除了 `Project.exec(Closure)`）。
+应用 ID 为 `com.deopti.downloader`。
+
 ## Web / WASM
 
 ```powershell

@@ -1,4 +1,4 @@
-package com.example.scan_downloader
+package com.deopti.downloader
 
 import io.flutter.embedding.android.FlutterActivity
 
