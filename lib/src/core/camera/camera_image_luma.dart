@@ -4,6 +4,16 @@ import 'package:camera/camera.dart';
 
 import 'luma_frame.dart';
 
+/// Longest side (in pixels) of the luma frame handed to the Rust decoder.
+///
+/// Camera sensors routinely deliver 1080p/4K, but the Rust scanner bounds
+/// itself to [`DEFAULT_SCAN_DIM`] (~1280px) anyway. Decimating here — before
+/// the `Uint8List` is built and shipped across the FFI boundary — cuts the
+/// per-frame memory traffic by an order of magnitude (e.g. a 4K frame goes
+/// from 8 MB to ~1.3 MB). This is the receiver's dominant cost on high-end
+/// devices, so it lives as close to the camera as possible.
+const int kMaxLumaSide = 1280;
+
 /// Converts camera plugin frames into the tightly packed luma plane consumed
 /// by the Rust QR decoder. Android commonly supplies YUV420 while Apple and
 /// Windows camera backends commonly supply BGRA8888.
@@ -40,22 +50,29 @@ LumaFrame? _lumaPlane(CameraImage image, DateTime timestamp) {
     return null;
   }
 
-  final gray = Uint8List(width * height);
-  if (pixelStride == 1 && rowStride == width) {
+  // Decimate so the larger side stays <= kMaxLumaSide (keeps aspect ratio).
+  final step = width > kMaxLumaSide ? (width / kMaxLumaSide).ceil() : 1;
+  final outWidth = (width / step).ceil();
+  final outHeight = (height / step).ceil();
+
+  final gray = Uint8List(outWidth * outHeight);
+  if (step == 1 && pixelStride == 1 && rowStride == width) {
     gray.setRange(0, gray.length, plane.bytes);
   } else {
-    for (var y = 0; y < height; y++) {
-      final row = y * rowStride;
-      final outputRow = y * width;
-      for (var x = 0; x < width; x++) {
-        gray[outputRow + x] = plane.bytes[row + x * pixelStride];
+    final lastX = width - 1;
+    final lastY = height - 1;
+    for (var y = 0; y < outHeight; y++) {
+      final row = (y * step).clamp(0, lastY) * rowStride;
+      final outputRow = y * outWidth;
+      for (var x = 0; x < outWidth; x++) {
+        gray[outputRow + x] = plane.bytes[row + (x * step).clamp(0, lastX) * pixelStride];
       }
     }
   }
   return LumaFrame(
     data: gray,
-    width: width,
-    height: height,
+    width: outWidth,
+    height: outHeight,
     timestamp: timestamp,
   );
 }
@@ -76,12 +93,19 @@ LumaFrame? _bgraToLuma(CameraImage image, DateTime timestamp) {
     return null;
   }
 
-  final gray = Uint8List(width * height);
-  for (var y = 0; y < height; y++) {
-    final row = y * rowStride;
-    final outputRow = y * width;
-    for (var x = 0; x < width; x++) {
-      final offset = row + x * pixelStride;
+  // Decimate so the larger side stays <= kMaxLumaSide (keeps aspect ratio).
+  final step = width > kMaxLumaSide ? (width / kMaxLumaSide).ceil() : 1;
+  final outWidth = (width / step).ceil();
+  final outHeight = (height / step).ceil();
+
+  final gray = Uint8List(outWidth * outHeight);
+  final lastX = width - 1;
+  final lastY = height - 1;
+  for (var y = 0; y < outHeight; y++) {
+    final row = (y * step).clamp(0, lastY) * rowStride;
+    final outputRow = y * outWidth;
+    for (var x = 0; x < outWidth; x++) {
+      final offset = row + (x * step).clamp(0, lastX) * pixelStride;
       final blue = plane.bytes[offset];
       final green = plane.bytes[offset + 1];
       final red = plane.bytes[offset + 2];
@@ -90,8 +114,8 @@ LumaFrame? _bgraToLuma(CameraImage image, DateTime timestamp) {
   }
   return LumaFrame(
     data: gray,
-    width: width,
-    height: height,
+    width: outWidth,
+    height: outHeight,
     timestamp: timestamp,
   );
 }

@@ -12,7 +12,10 @@ import 'luma_frame.dart';
 /// (Android / iOS / macOS / Windows). Frames are delivered as YUV420; only
 /// the Y plane is forwarded, so no colour conversion ever happens in Dart.
 class PluginCameraSource implements CameraFrameSource {
-  PluginCameraSource({this.maxFramesPerSecond = 20});
+  // Camera frames are decimated to <=1280px in camera_image_luma.dart, so
+  // feeding the analysis stream faster is cheap; the receiver's single-flight
+  // decode applies natural backpressure.
+  PluginCameraSource({this.maxFramesPerSecond = 30});
 
   final int maxFramesPerSecond;
   CameraController? _controller;

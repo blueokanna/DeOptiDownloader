@@ -111,12 +111,13 @@ class ReceiverController extends ChangeNotifier {
   }
 
   Future<void> _onFrame(LumaFrame frame) async {
-    // Match the camera analysis stream at up to 20 fps. Slow decodes apply
-    // natural backpressure because only one Rust worker request may be active.
+    // Frames are decimated to <=1280px and decoded coarse-to-fine, so the
+    // analysis loop can run up to ~30 fps; slow decodes apply natural
+    // backpressure because only one Rust worker request may be active.
     if (_decoding) {
       return;
     }
-    final interval = const Duration(milliseconds: 50);
+    final interval = const Duration(milliseconds: 33);
     if (frame.timestamp.difference(_lastDecodeAt) < interval) {
       return;
     }

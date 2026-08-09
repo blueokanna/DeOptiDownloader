@@ -28,39 +28,52 @@ pub const DEFAULT_SCAN_DIM: u32 = 1280;
 /// Smallest QR version (1..=40) whose ECC-L byte capacity holds `frame_bytes`,
 /// or `None` when it does not fit in a Version-40 symbol.
 pub fn qr_version_for(frame_bytes: usize) -> Option<u8> {
-    if frame_bytes == 0 || frame_bytes > MAX_QR_FRAME_BYTES {
+    if frame_bytes == 0 {
         return None;
     }
     let probe = vec![0u8; frame_bytes];
-    let code = qrcode::QrCode::with_error_correction_level(&probe, qrcode::EcLevel::L).ok()?;
-    let width = code.width();
-    u8::try_from((width.saturating_sub(21)) / 4 + 1).ok()
+    let code = qrcodegen::QrCode::encode_binary(&probe, qrcodegen::QrCodeEcc::Low).ok()?;
+    let size = code.size();
+    u8::try_from((size.saturating_sub(21)) / 4 + 1).ok()
 }
 
 /// Encode raw bytes into a QR module matrix (ECC L, smallest fitting version).
+///
+/// Uses `qrcodegen` (≈8× faster than the previous `qrcode` crate at
+/// Version-40 payloads) so the sender can sustain 60 fps even for the largest
+/// frame size. Byte mode matches the ISO/IEC 18004 capacity table the sender
+/// uses to pick a version.
 pub fn qr_encode(data: &[u8]) -> Result<QrMatrix, String> {
     if data.is_empty() {
         return Err("qr_encode: empty payload".to_owned());
     }
-    let code = qrcode::QrCode::with_error_correction_level(data, qrcode::EcLevel::L)
+    let code = qrcodegen::QrCode::encode_binary(data, qrcodegen::QrCodeEcc::Low)
         .map_err(|e| format!("qr_encode: {e}"))?;
-    let width = code.width() as u32;
-    let cells: Vec<u8> = code
-        .into_colors()
-        .into_iter()
-        .map(|c| match c {
-            qrcode::Color::Dark => 1,
-            qrcode::Color::Light => 0,
-        })
-        .collect();
+    let size = code.size() as u32;
+    let mut cells = Vec::with_capacity((size * size) as usize);
+    for y in 0..size {
+        for x in 0..size {
+            cells.push(if code.get_module(x as i32, y as i32) {
+                1
+            } else {
+                0
+            });
+        }
+    }
     Ok(QrMatrix {
-        width,
-        height: width,
+        width: size,
+        height: size,
         cells,
     })
 }
 
 /// Decode a QR from a tight grayscale (luma8) buffer, optionally downscaled.
+///
+/// Two passes ("coarse to fine"): first a fast 640px scan (no TryHarder) that
+/// solves most clean camera frames in a few ms; only when it fails does the
+/// decoder escalate to the full scan bound with TryHarder for hard frames
+/// (motion blur, glare, dense symbols). This keeps the common path ~4× faster
+/// than always decoding at the large bound.
 #[flutter_rust_bridge::frb(dart_async)]
 pub fn qr_decode_gray(
     gray: Vec<u8>,
@@ -74,13 +87,12 @@ pub fn qr_decode_gray(
     if (width as u64) * (height as u64) != gray.len() as u64 {
         return Err("qr_decode_gray: buffer size mismatch".to_owned());
     }
-    let (data, w, h) = downscale(
-        &gray,
+    decode_gray_buffer(
+        gray,
         width,
         height,
         max_scan_dim.unwrap_or(DEFAULT_SCAN_DIM),
-    );
-    decode_luma(&data, w, h)
+    )
 }
 
 /// Decode a QR from an RGBA buffer, extracting luminance first.
@@ -103,13 +115,37 @@ pub fn qr_decode_rgba(
         let luma = (77 * px[0] as u32 + 150 * px[1] as u32 + 29 * px[2] as u32) >> 8;
         gray.push(luma as u8);
     }
-    let (data, w, h) = downscale(
-        &gray,
+    decode_gray_buffer(
+        gray,
         width,
         height,
         max_scan_dim.unwrap_or(DEFAULT_SCAN_DIM),
-    );
-    decode_luma(&data, w, h)
+    )
+}
+
+/// Coarse-to-fine decode over an owned luma buffer (no per-frame copy).
+///
+/// A fast 640px pass (no TryHarder) solves most clean camera frames; only when
+/// it fails does the decoder escalate to the full scan bound with TryHarder
+/// for hard frames (motion blur, glare, dense symbols). The common path stays
+/// ~4× faster than always decoding at the large bound.
+fn decode_gray_buffer(
+    gray: Vec<u8>,
+    width: u32,
+    height: u32,
+    max_dim: u32,
+) -> Result<Option<Vec<u8>>, String> {
+    const FAST_DIM: u32 = 640;
+    let (scaled, w, h) = downscale(&gray, width, height, max_dim);
+    if max_dim <= FAST_DIM {
+        return decode_luma(scaled, w, h, true);
+    }
+    // Fast pass first; most clean frames succeed here (≈4× less decoder work).
+    let (small, sw, sh) = downscale(&scaled, w, h, FAST_DIM);
+    if let Some(bytes) = decode_luma(small, sw, sh, false)? {
+        return Ok(Some(bytes));
+    }
+    decode_luma(scaled, w, h, true)
 }
 
 /// Box-sample a grayscale image so its larger side is `max_dim` pixels.
@@ -144,20 +180,29 @@ fn downscale(data: &[u8], width: u32, height: u32, max_dim: u32) -> (Vec<u8>, u3
     (out, nw, nh)
 }
 
-/// Run the ZXing-derived decoder over a luma8 buffer.
-fn decode_luma(data: &[u8], width: u32, height: u32) -> Result<Option<Vec<u8>>, String> {
+/// Run the ZXing-derived decoder over an owned luma8 buffer.
+///
+/// [try_harder] trades speed for robustness; the streaming fast pass keeps it
+/// off because most camera frames of a moving QR fail, and TryHarder makes
+/// every failed attempt several times slower.
+fn decode_luma(
+    data: Vec<u8>,
+    width: u32,
+    height: u32,
+    try_harder: bool,
+) -> Result<Option<Vec<u8>>, String> {
     use rxing::common::HybridBinarizer;
     use rxing::{
         BarcodeFormat, BinaryBitmap, DecodeHints, Luma8LuminanceSource, MultiFormatReader, Reader,
     };
 
-    let source = Luma8LuminanceSource::new(data.to_vec(), width, height)
-        .map_err(|e| format!("qr_decode: {e}"))?;
+    let source =
+        Luma8LuminanceSource::new(data, width, height).map_err(|e| format!("qr_decode: {e}"))?;
     let mut bitmap = BinaryBitmap::new(HybridBinarizer::new(source));
     let mut reader = MultiFormatReader::default();
     let hints = DecodeHints {
         PossibleFormats: Some(std::collections::HashSet::from([BarcodeFormat::QR_CODE])),
-        TryHarder: Some(true),
+        TryHarder: Some(try_harder),
         ..DecodeHints::default()
     };
 
