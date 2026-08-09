@@ -77,7 +77,7 @@ and extended:
 | Filename / media type preserved | ✅ DCF3 container                                  |
 | Progress + “no signal” hint     | ✅ progress bar, receiver-lock line, hint card     |
 | Keep-screen-on while streaming  | ✅ `wakelock_plus` (send + receive)                |
-| Sender tuning (fps / frame size)| ✅ 10/15/20/24/30/60 fps, 500–2953 B frames       |
+| Sender tuning (fps / frame size)| ✅ defaults to 60 fps / 2331 B; 500–2953 B range   |
 | **New:** password encryption    | ✅ XChaCha20-Poly1305 + Argon2id (opt-in)          |
 | **New:** judge-recoverable JRC  | ✅ deopti_transfer 0.1.2 `pack_file_jrc` (opt-in)  |
 | **New:** automatic re-lock      | ✅ stream-conflict auto reset in Rust              |
@@ -208,10 +208,12 @@ to avoid a known Windows Kotlin incremental-cache failure, and
 (Gradle 9 removed `Project.exec(Closure)`). The application id is
 `com.deopti.downloader`.
 
-Release builds never fall back to the debug key. For a signed APK/AAB, create
-the untracked `android/key.properties` with `storeFile`, `storePassword`,
-`keyAlias`, and `keyPassword`; without it Gradle produces an unsigned release
-artifact suitable for CI verification only.
+Release signing: the release APK is signed with the keystore described in the
+untracked `android/key.properties` when it exists (`storeFile`, `storePassword`,
+`keyAlias`, `keyPassword`). Without it, the release build falls back to the
+debug key so the APK is always signed and installable (`adb install` works) —
+never unsigned. For publishing to a store, generate a real keystore, point
+`android/key.properties` at it and keep both files safe and untracked.
 
 ## Web / WASM
 

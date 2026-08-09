@@ -66,7 +66,9 @@ class WebWallpaperStore implements WallpaperStore {
   @override
   Future<void> deleteCustomImage(WallpaperSpec spec) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_kImage);
+    if (prefs.getString(_kImage) == spec.imagePath) {
+      await prefs.remove(_kImage);
+    }
   }
 }
 

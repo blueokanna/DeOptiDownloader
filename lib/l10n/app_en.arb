@@ -48,7 +48,7 @@
   "waitingForSender": "Point the camera at the sender’s screen…",
   "pointCamera": "Keep the QR code inside the frame. A stream locks on automatically once frames are decoded.",
   "noSignalTitle": "Nothing happening?",
-  "noSignalBody": "Make sure the sender is streaming. If it still fails, try sender settings of 24 fps and 1465-byte frames.",
+  "noSignalBody": "Keep the whole QR code and its white border inside the viewfinder, avoiding glare, obstructions, and low screen brightness.",
   "progressFrames": "Frames",
   "receiverLocked": "Locked to stream",
   "transferMode": "Mode",

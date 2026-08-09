@@ -43,6 +43,8 @@ class SenderStats {
 class SenderController extends ChangeNotifier {
   SenderController({required this.session, required this.info});
 
+  static const int defaultFps = 60;
+
   final SenderSession session;
   final SenderInfo info;
 
@@ -52,7 +54,7 @@ class SenderController extends ChangeNotifier {
   /// Stats, refreshed ~2×/s so the status line does not churn.
   final ValueNotifier<SenderStats> stats = ValueNotifier(const SenderStats());
 
-  int _fps = 30;
+  int _fps = defaultFps;
   int get fps => _fps;
 
   bool _running = false;

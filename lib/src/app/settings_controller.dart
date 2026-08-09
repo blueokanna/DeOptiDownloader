@@ -147,9 +147,14 @@ class AppSettings extends ChangeNotifier {
   }
 
   Future<void> setWallpaper(WallpaperSpec spec) async {
+    final previous = wallpaper;
     wallpaper = spec;
     notifyListeners();
     await wallpaperStore.save(spec);
+    if (previous.kind == WallpaperKind.custom &&
+        previous.imagePath != spec.imagePath) {
+      await wallpaperStore.deleteCustomImage(previous);
+    }
   }
 
   Future<void> setWallpaperBlur(double blur) async {
@@ -158,16 +163,24 @@ class AppSettings extends ChangeNotifier {
     await wallpaperStore.save(wallpaper);
   }
 
-  /// Stores a custom image (bytes from the picker) and activates it.
-  Future<String?> setCustomWallpaper(List<int> bytes) async {
+  /// Stores a custom image without changing visible state. The caller can
+  /// decode it first and then activate it atomically with [setWallpaper].
+  Future<WallpaperSpec?> prepareCustomWallpaper(List<int> bytes) async {
     final stored = await wallpaperStore.storeCustomImage(bytes);
     if (stored == null) {
       return null;
     }
-    wallpaper = WallpaperSpec.custom(stored, blur: 0);
-    notifyListeners();
-    await wallpaperStore.save(wallpaper);
-    return stored;
+    return WallpaperSpec.custom(stored, blur: 0);
+  }
+
+  /// Compatibility entry point for non-visual callers.
+  Future<String?> setCustomWallpaper(List<int> bytes) async {
+    final spec = await prepareCustomWallpaper(bytes);
+    if (spec == null) {
+      return null;
+    }
+    await setWallpaper(spec);
+    return spec.imagePath;
   }
 
   Future<void> removeCustomWallpaper() async {

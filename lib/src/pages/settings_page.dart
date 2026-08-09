@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
@@ -270,20 +272,34 @@ class _SettingsPageState extends State<SettingsPage> {
                 style: Theme.of(context).textTheme.labelMedium,
               ),
             ),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                for (final id in kBuiltinWallpapers)
-                  _WallpaperTile(
-                    assetId: id,
-                    selected:
-                        settings.wallpaper.kind == WallpaperKind.builtin &&
-                        settings.wallpaper.assetId == id,
-                    onTap: () =>
-                        settings.setWallpaper(WallpaperSpec.builtin(id)),
-                  ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                const spacing = 12.0;
+                final columns = constraints.maxWidth >= 240 ? 3 : 2;
+                final width = math.min(
+                  96.0,
+                  (constraints.maxWidth - spacing * (columns - 1)) / columns,
+                );
+                return Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: spacing,
+                  runSpacing: spacing,
+                  children: [
+                    for (final id in kBuiltinWallpapers)
+                      _WallpaperTile(
+                        assetId: id,
+                        width: width,
+                        selected:
+                            settings.wallpaper.kind == WallpaperKind.builtin &&
+                            settings.wallpaper.assetId == id,
+                        onTap: () => _activateWallpaper(
+                          settings,
+                          WallpaperSpec.builtin(id),
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
             // Custom image.
             const Divider(height: 20),
@@ -378,7 +394,11 @@ class _SettingsPageState extends State<SettingsPage> {
       if (bytes.isEmpty) {
         return;
       }
-      await settings.setCustomWallpaper(bytes);
+      final spec = await settings.prepareCustomWallpaper(bytes);
+      if (spec == null || !mounted) {
+        return;
+      }
+      await _activateWallpaper(settings, spec, evictFirst: true);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -390,6 +410,28 @@ class _SettingsPageState extends State<SettingsPage> {
         setState(() => _pickingCustom = false);
       }
     }
+  }
+
+  Future<void> _activateWallpaper(
+    AppSettings settings,
+    WallpaperSpec spec, {
+    bool evictFirst = false,
+  }) async {
+    final provider = wallpaperImageProvider(spec);
+    if (provider == null) {
+      return;
+    }
+    if (evictFirst) {
+      await provider.evict();
+    }
+    if (!mounted) {
+      return;
+    }
+    await precacheImage(provider, context);
+    if (!mounted) {
+      return;
+    }
+    await settings.setWallpaper(spec);
   }
 
   // --- Advanced ------------------------------------------------------------
@@ -578,11 +620,13 @@ class _ColorSpecTile extends StatelessWidget {
 class _WallpaperTile extends StatelessWidget {
   const _WallpaperTile({
     required this.assetId,
+    required this.width,
     required this.selected,
     required this.onTap,
   });
 
   final String assetId;
+  final double width;
   final bool selected;
   final VoidCallback onTap;
 
@@ -593,8 +637,8 @@ class _WallpaperTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(Shape.md),
       child: AnimatedContainer(
         duration: Motion.short,
-        width: 84,
-        height: 120,
+        width: width,
+        height: width * 10 / 7,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(Shape.md),
           border: Border.all(

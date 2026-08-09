@@ -7,7 +7,10 @@ import 'package:scan_downloader/src/app/app.dart';
 import 'package:scan_downloader/src/app/settings_controller.dart';
 import 'package:scan_downloader/src/app/theme/app_themes.dart';
 import 'package:scan_downloader/src/app/theme/wallpaper.dart';
+import 'package:scan_downloader/src/core/qr/qr_display.dart';
+import 'package:scan_downloader/src/core/transfer/sender_controller.dart';
 import 'package:scan_downloader/src/rust/api/transfer.dart';
+import 'package:scan_downloader/src/rust/api/types.dart';
 import 'package:scan_downloader/src/rust/frb_generated.dart';
 
 void main() {
@@ -29,10 +32,36 @@ void main() {
     final options = frameSizeOptions();
     expect(options, isNotEmpty);
     expect(options.last, lessThanOrEqualTo(2953));
+    expect(defaultFrameSize(), 2331);
+    expect(options, contains(defaultFrameSize()));
+    expect(SenderController.defaultFps, 60);
     final supported = encryptionSupported();
     expect(supported, isA<bool>());
     final max = maxFileBytes();
     expect(max, 64 * 1024 * 1024);
+  });
+
+  testWidgets('QR display reserves the ISO four-module quiet zone', (
+    tester,
+  ) async {
+    final matrix = ValueNotifier<QrMatrix?>(
+      QrMatrix(width: 1, height: 1, cells: Uint8List.fromList([1])),
+    );
+    addTearDown(matrix.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox.square(dimension: 300, child: QrDisplay(matrix: matrix)),
+      ),
+    );
+
+    final customPaintFinder = find.descendant(
+      of: find.byType(QrDisplay),
+      matching: find.byType(CustomPaint),
+    );
+    expect(customPaintFinder, findsOneWidget);
+    final customPaint = tester.widget<CustomPaint>(customPaintFinder);
+    final painter = customPaint.painter! as QrPainter;
+    expect(painter.quietZoneModules, 4);
   });
 
   test(

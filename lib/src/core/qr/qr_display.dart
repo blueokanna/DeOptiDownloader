@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -12,12 +14,14 @@ class QrPainter extends CustomPainter {
     required this.matrix,
     required this.dark,
     required this.light,
+    this.quietZoneModules = 4,
     super.repaint,
   });
 
   final QrMatrix matrix;
   final Color dark;
   final Color light;
+  final int quietZoneModules;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -27,7 +31,11 @@ class QrPainter extends CustomPainter {
     }
     canvas.drawRect(Offset.zero & size, Paint()..color = light);
 
-    final cell = size.width / w;
+    final totalModules = w + quietZoneModules * 2;
+    final cell = math.min(size.width, size.height) / totalModules;
+    final qrExtent = totalModules * cell;
+    final left = (size.width - qrExtent) / 2 + quietZoneModules * cell;
+    final top = (size.height - qrExtent) / 2 + quietZoneModules * cell;
     final cells = matrix.cells;
     final path = Path();
     for (var y = 0; y < w; y++) {
@@ -39,24 +47,32 @@ class QrPainter extends CustomPainter {
           while (x + run < w && cells[rowBase + x + run] == 1) {
             run++;
           }
-          final left = x * cell;
-          final top = y * cell;
+          final moduleLeft = left + x * cell;
+          final moduleTop = top + y * cell;
           // +0.6 overlaps one device pixel to hide sub-pixel seams.
-          path.addRect(Rect.fromLTWH(left, top, run * cell + 0.6, cell + 0.6));
+          path.addRect(
+            Rect.fromLTWH(moduleLeft, moduleTop, run * cell + 0.6, cell + 0.6),
+          );
           x += run;
         } else {
           x++;
         }
       }
     }
-    canvas.drawPath(path, Paint()..color = dark);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = dark
+        ..isAntiAlias = false,
+    );
   }
 
   @override
   bool shouldRepaint(QrPainter oldDelegate) =>
       oldDelegate.matrix != matrix ||
       oldDelegate.dark != dark ||
-      oldDelegate.light != light;
+      oldDelegate.light != light ||
+      oldDelegate.quietZoneModules != quietZoneModules;
 }
 
 /// A full QR stream display: dark/light colors, a quiet-zone margin and the
@@ -67,13 +83,13 @@ class QrDisplay extends StatelessWidget {
     required this.matrix,
     this.dark = Colors.black,
     this.light = Colors.white,
-    this.margin = 16,
+    this.quietZoneModules = 4,
   });
 
   final ValueListenable<QrMatrix?> matrix;
   final Color dark;
   final Color light;
-  final double margin;
+  final int quietZoneModules;
 
   @override
   Widget build(BuildContext context) {
@@ -83,10 +99,20 @@ class QrDisplay extends StatelessWidget {
         if (value == null) {
           return const SizedBox.shrink();
         }
-        return RepaintBoundary(
-          child: CustomPaint(
-            painter: QrPainter(matrix: value, dark: dark, light: light),
-            child: const SizedBox.expand(),
+        return Center(
+          child: AspectRatio(
+            aspectRatio: 1,
+            child: RepaintBoundary(
+              child: CustomPaint(
+                painter: QrPainter(
+                  matrix: value,
+                  dark: dark,
+                  light: light,
+                  quietZoneModules: quietZoneModules,
+                ),
+                child: const SizedBox.expand(),
+              ),
+            ),
           ),
         );
       },

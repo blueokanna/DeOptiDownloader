@@ -39,8 +39,8 @@ class _SendPageState extends State<SendPage> {
   bool _encryptionSupported = false;
   final TextEditingController _password = TextEditingController();
   final TextEditingController _judgePublicKey = TextEditingController();
-  int _fps = 24;
-  int _frameBytes = 2953;
+  int _fps = SenderController.defaultFps;
+  int _frameBytes = defaultFrameSize();
   List<int> _frameOptions = const [];
   final bool _darkOnLight = true;
 
@@ -62,8 +62,9 @@ class _SendPageState extends State<SendPage> {
     }
     setState(() {
       _frameOptions = options;
-      if (_frameOptions.isNotEmpty) {
-        _frameBytes = _frameOptions.last;
+      final preferred = defaultFrameSize();
+      if (_frameOptions.isNotEmpty && _frameOptions.contains(preferred)) {
+        _frameBytes = preferred;
       }
       _encryptionSupported = supported;
     });
@@ -285,7 +286,10 @@ class _SendPageState extends State<SendPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(payload.name, style: Theme.of(context).textTheme.titleSmall),
+                        Text(
+                          payload.name,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
                         const SizedBox(height: 2),
                         Text(
                           '${s.fileType}: ${payload.mimeType}  ·  ${formatBytes(payload.length)}',
@@ -376,7 +380,8 @@ class _SendPageState extends State<SendPage> {
               items: const [10, 15, 20, 24, 30, 60]
                   .map((v) => DropdownMenuItem(value: v, child: Text('$v fps')))
                   .toList(),
-              onChanged: (v) => setState(() => _fps = v ?? 24),
+              onChanged: (v) =>
+                  setState(() => _fps = v ?? SenderController.defaultFps),
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<int>(
@@ -547,7 +552,8 @@ class _SendPageState extends State<SendPage> {
     if (info == null) {
       return;
     }
-    final text = '${s.appName}\n'
+    final text =
+        '${s.appName}\n'
         '${s.session}: ${info.sessionId}\n'
         '${s.sourceBlocks}: ${info.k}\n'
         '${s.blockSize}: ${info.blockLen} B\n'

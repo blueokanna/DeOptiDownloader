@@ -191,11 +191,21 @@ ThemeData buildTheme(
     splashFactory: InkSparkle.splashFactory,
     pageTransitionsTheme: const PageTransitionsTheme(
       builders: {
-        TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
-        TargetPlatform.iOS: FadeForwardsPageTransitionsBuilder(),
-        TargetPlatform.macOS: FadeForwardsPageTransitionsBuilder(),
-        TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
-        TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
+        TargetPlatform.android: FadeForwardsPageTransitionsBuilder(
+          backgroundColor: Colors.transparent,
+        ),
+        TargetPlatform.iOS: FadeForwardsPageTransitionsBuilder(
+          backgroundColor: Colors.transparent,
+        ),
+        TargetPlatform.macOS: FadeForwardsPageTransitionsBuilder(
+          backgroundColor: Colors.transparent,
+        ),
+        TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(
+          backgroundColor: Colors.transparent,
+        ),
+        TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(
+          backgroundColor: Colors.transparent,
+        ),
       },
     ),
   );

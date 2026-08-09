@@ -44,8 +44,14 @@ android {
 
     buildTypes {
         release {
-            if (keystorePropertiesFile.exists()) {
-                signingConfig = signingConfigs.getByName("release")
+            // Sign with the release keystore when android/key.properties
+            // exists; otherwise fall back to the debug key so the release APK
+            // is always signed and installable (matches the Flutter template
+            // default — never produce an unsigned APK).
+            signingConfig = if (keystorePropertiesFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
             }
         }
     }

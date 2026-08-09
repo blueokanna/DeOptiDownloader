@@ -59,7 +59,8 @@ class ReceiverController extends ChangeNotifier {
   Uint8List? _pendingContainer;
   bool _unpacking = false;
 
-  bool get hasSignal => acceptedFrames > 0 || outcome.sessionId != null;
+  bool get hasSignal =>
+      manifest != null || acceptedFrames > 0 || outcome.sessionId != null;
 
   /// Whether the "no signal" hint should be shown (no lock for 4 seconds).
   bool get showNoSignal {
@@ -125,14 +126,12 @@ class ReceiverController extends ChangeNotifier {
           rgba: frame.data,
           width: frame.width,
           height: frame.height,
-          maxScanDim: 640,
         );
       } else {
         bytes = qr.qrDecodeGray(
           gray: frame.data,
           width: frame.width,
           height: frame.height,
-          maxScanDim: 640,
         );
       }
       if (bytes == null) {

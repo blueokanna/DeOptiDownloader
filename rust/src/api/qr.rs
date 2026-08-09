@@ -8,9 +8,9 @@
 //! - **Smallest version that fits** — chosen deterministically from the
 //!   ISO/IEC 18004 byte-capacity table, so sender and receiver agree on what
 //!   fits without handshaking.
-//! - **Downscale before decode** — camera frames are far larger than the QR
-//!   needs; a box-sampled downscale to ~640px keeps module size ~3px and
-//!   makes binarization fast and stable.
+//! - **Downscale before decode** — camera frames are bounded to 1280px. Dense
+//!   Version-37/40 symbols still retain roughly 3 physical pixels per module,
+//!   while decoder work remains allocation-bounded.
 //!
 //! Everything here is pure and allocation-bounded so it compiles unchanged
 //! for `wasm32-unknown-unknown`.
@@ -21,16 +21,9 @@ use crate::api::types::QrMatrix;
 /// sizes above this are rejected before a session starts.
 pub const MAX_QR_FRAME_BYTES: usize = 2953;
 
-/// Default scan dimension for decoding: frames are downscaled so the larger
-/// side is at most this many pixels.
-pub const DEFAULT_SCAN_DIM: u32 = 640;
-
-/// Byte-mode capacity at ECC level L for QR versions 1..=40 (ISO/IEC 18004).
-const QR_L_BYTE_CAPACITY: [u16; 40] = [
-    17, 32, 53, 78, 106, 134, 154, 192, 230, 271, 321, 367, 425, 458, 520, 586, 644, 718, 792, 858,
-    929, 1003, 1091, 1171, 1273, 1353, 1431, 1511, 1593, 1679, 1755, 1843, 1927, 2011, 2103, 2189,
-    2275, 2369, 2455, 2953,
-];
+/// Default scan dimension for decoding. 640px destroys too much detail for a
+/// dense QR photographed from another phone screen.
+pub const DEFAULT_SCAN_DIM: u32 = 1280;
 
 /// Smallest QR version (1..=40) whose ECC-L byte capacity holds `frame_bytes`,
 /// or `None` when it does not fit in a Version-40 symbol.
@@ -38,10 +31,10 @@ pub fn qr_version_for(frame_bytes: usize) -> Option<u8> {
     if frame_bytes == 0 || frame_bytes > MAX_QR_FRAME_BYTES {
         return None;
     }
-    QR_L_BYTE_CAPACITY
-        .iter()
-        .position(|&cap| (cap as usize) >= frame_bytes)
-        .map(|i| (i + 1) as u8)
+    let probe = vec![0u8; frame_bytes];
+    let code = qrcode::QrCode::with_error_correction_level(&probe, qrcode::EcLevel::L).ok()?;
+    let width = code.width();
+    u8::try_from((width.saturating_sub(21)) / 4 + 1).ok()
 }
 
 /// Encode raw bytes into a QR module matrix (ECC L, smallest fitting version).
@@ -224,6 +217,47 @@ mod tests {
             }
         }
         let decoded = qr_decode_gray(img, size as u32, size as u32, None).expect("decode");
+        assert_eq!(decoded.as_deref(), Some(payload.as_slice()));
+    }
+
+    #[test]
+    fn dense_screen_qr_survives_camera_scene_downscale() {
+        let mut payload = vec![0u8; 2331];
+        for (index, value) in payload.iter_mut().enumerate() {
+            *value = (index as u32)
+                .wrapping_mul(73)
+                .wrapping_add(19)
+                .to_le_bytes()[0];
+        }
+        let matrix = qr_encode(&payload).expect("encode dense QR");
+        assert_eq!(matrix.width, 161); // Version 36.
+
+        const SCENE_WIDTH: usize = 1920;
+        const SCENE_HEIGHT: usize = 1080;
+        const MODULE: usize = 4;
+        const QUIET_ZONE: usize = 4;
+        let symbol_modules = matrix.width as usize + QUIET_ZONE * 2;
+        let symbol_pixels = symbol_modules * MODULE;
+        let origin_x = (SCENE_WIDTH - symbol_pixels) / 2 + QUIET_ZONE * MODULE;
+        let origin_y = (SCENE_HEIGHT - symbol_pixels) / 2 + QUIET_ZONE * MODULE;
+        let mut scene = vec![255u8; SCENE_WIDTH * SCENE_HEIGHT];
+
+        for y in 0..matrix.height as usize {
+            for x in 0..matrix.width as usize {
+                if matrix.cells[y * matrix.width as usize + x] == 0 {
+                    continue;
+                }
+                for dy in 0..MODULE {
+                    let row = (origin_y + y * MODULE + dy) * SCENE_WIDTH;
+                    for dx in 0..MODULE {
+                        scene[row + origin_x + x * MODULE + dx] = 0;
+                    }
+                }
+            }
+        }
+
+        let decoded = qr_decode_gray(scene, SCENE_WIDTH as u32, SCENE_HEIGHT as u32, None)
+            .expect("decode dense screen QR");
         assert_eq!(decoded.as_deref(), Some(payload.as_slice()));
     }
 

@@ -144,7 +144,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noSignalTitle => '没反应？';
 
   @override
-  String get noSignalBody => '请确认发送方正在传输。若仍然失败，可将发送方设置为 24 帧/秒、1465 字节帧。';
+  String get noSignalBody => '请将完整二维码连同四周白色边框置于取景框内，并避免反光、遮挡或屏幕亮度过低。';
 
   @override
   String get progressFrames => '帧';

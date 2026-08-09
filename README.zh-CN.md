@@ -63,7 +63,7 @@ English version: [README.md](README.md)。
 | 保留文件名 / 媒体类型          | ✅ DCF3 容器                                 |
 | 进度与“无信号”提示             | ✅ 进度条、流锁定行、提示卡片                |
 | 传输时保持屏幕常亮             | ✅ `wakelock_plus`（发送与接收）             |
-| 发送端可调帧率 / 帧大小        | ✅ 10/15/20/24/30/60 fps，500–2953 字节帧    |
+| 发送端可调帧率 / 帧大小        | ✅ 默认 60 fps / 2331 B；可选 500–2953 B     |
 | **新增：** 密码加密            | ✅ XChaCha20-Poly1305 + Argon2id（可选）     |
 | **新增：** 法官可恢复 JRC      | ✅ deopti_transfer 0.1.2 `pack_file_jrc`     |
 | **新增：** 自动重新锁定        | ✅ Rust 内流冲突自动重置                     |
@@ -181,9 +181,11 @@ Android 构建固定为 **AGP 8.13 + Gradle 8.14.3**（见 `android/settings.gra
 已改用 Gradle 的 `ExecOperations`（Gradle 9 移除了 `Project.exec(Closure)`）。
 应用 ID 为 `com.deopti.downloader`。
 
-发布构建不会回退使用 debug 密钥。要生成已签名 APK/AAB，请创建不会被 Git 跟踪的
-`android/key.properties`，填写 `storeFile`、`storePassword`、`keyAlias` 与
-`keyPassword`；缺少该文件时 Gradle 只生成适合 CI 验证的未签名发布产物。
+发布签名：当存在不被 Git 跟踪的 `android/key.properties`（含 `storeFile`、
+`storePassword`、`keyAlias`、`keyPassword`）时，release APK 使用其中的密钥库签名；
+缺少该文件时回退使用 debug 密钥，保证 release APK 永远已签名且可直接安装
+（`adb install` 可用）——绝不会产出未签名 APK。上架应用商店前请生成正式密钥库，
+将 `android/key.properties` 指向它，并妥善保管这两个不被跟踪的文件。
 
 ## Web / WASM
 

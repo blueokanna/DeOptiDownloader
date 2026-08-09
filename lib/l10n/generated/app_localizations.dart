@@ -371,7 +371,7 @@ abstract class AppLocalizations {
   /// No description provided for @noSignalBody.
   ///
   /// In en, this message translates to:
-  /// **'Make sure the sender is streaming. If it still fails, try sender settings of 24 fps and 1465-byte frames.'**
+  /// **'Keep the whole QR code and its white border inside the viewfinder, avoiding glare, obstructions, and low screen brightness.'**
   String get noSignalBody;
 
   /// No description provided for @progressFrames.

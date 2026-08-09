@@ -11,14 +11,34 @@ const _kKind = 'wallpaper.kind';
 const _kAsset = 'wallpaper.asset';
 const _kImage = 'wallpaper.image';
 const _kBlur = 'wallpaper.blur';
-const _kCustomFile = 'wallpaper_custom.png';
+const _kLegacyCustomFile = 'wallpaper_custom.png';
+const _kCustomPrefix = 'wallpaper_custom_';
 
 /// Native implementation: custom image copied to the app support directory.
 class IoWallpaperStore implements WallpaperStore {
-  Future<File?> _customFile() async {
+  Future<File?> _customFile(SharedPreferences prefs) async {
     final dir = await getApplicationSupportDirectory();
-    final file = File('${dir.path}${Platform.pathSeparator}$_kCustomFile');
-    return file.existsSync() ? file : null;
+    final storedPath = prefs.getString(_kImage);
+    if (storedPath != null) {
+      final stored = File(storedPath);
+      if (_isManagedFile(dir, stored) && await stored.exists()) {
+        return stored;
+      }
+    }
+
+    // One-time compatibility with versions that always used a fixed name.
+    final legacy = File(
+      '${dir.path}${Platform.pathSeparator}$_kLegacyCustomFile',
+    );
+    return await legacy.exists() ? legacy : null;
+  }
+
+  bool _isManagedFile(Directory dir, File file) {
+    final parent = file.parent.absolute.path.toLowerCase();
+    final expected = dir.absolute.path.toLowerCase();
+    final name = file.uri.pathSegments.last;
+    return parent == expected &&
+        (name == _kLegacyCustomFile || name.startsWith(_kCustomPrefix));
   }
 
   @override
@@ -34,7 +54,7 @@ class IoWallpaperStore implements WallpaperStore {
         }
         return const WallpaperSpec.none();
       case 'custom':
-        final file = await _customFile();
+        final file = await _customFile(prefs);
         if (file != null) {
           return WallpaperSpec.custom(file.path, blur: blur);
         }
@@ -68,21 +88,36 @@ class IoWallpaperStore implements WallpaperStore {
   @override
   Future<String?> storeCustomImage(List<int> bytes) async {
     final dir = await getApplicationSupportDirectory();
-    final file = File('${dir.path}${Platform.pathSeparator}$_kCustomFile');
+    final file = File(
+      '${dir.path}${Platform.pathSeparator}'
+      '$_kCustomPrefix${DateTime.now().microsecondsSinceEpoch}.img',
+    );
     await file.writeAsBytes(Uint8List.fromList(bytes), flush: true);
     return file.path;
   }
 
   @override
   Future<void> deleteCustomImage(WallpaperSpec spec) async {
-    final file = await _customFile();
+    final path = spec.imagePath;
+    if (path == null || path.isEmpty) {
+      return;
+    }
+    final dir = await getApplicationSupportDirectory();
+    final file = File(path);
+    if (!_isManagedFile(dir, file)) {
+      return;
+    }
     try {
-      await file?.delete();
+      if (await file.exists()) {
+        await file.delete();
+      }
     } catch (_) {
       // Best effort.
     }
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_kImage);
+    if (prefs.getString(_kImage) == path) {
+      await prefs.remove(_kImage);
+    }
   }
 }
 

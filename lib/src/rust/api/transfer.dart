@@ -24,7 +24,7 @@ int maxFileBytes() => RustLib.instance.api.crateApiTransferMaxFileBytes();
 Uint32List frameSizeOptions() =>
     RustLib.instance.api.crateApiTransferFrameSizeOptions();
 
-/// Default frame size (Version-40 QR, maximum throughput).
+/// Default frame size (QR Version 36, balanced for real camera capture).
 int defaultFrameSize() =>
     RustLib.instance.api.crateApiTransferDefaultFrameSize();
 

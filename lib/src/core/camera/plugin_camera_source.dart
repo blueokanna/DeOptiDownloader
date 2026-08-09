@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'camera_image_luma.dart';
@@ -38,15 +40,21 @@ class PluginCameraSource implements CameraFrameSource {
     );
     final controller = CameraController(
       camera,
-      ResolutionPreset.high,
+      ResolutionPreset.veryHigh,
       enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.yuv420,
+      imageFormatGroup: _preferredImageFormat,
     );
     await controller.initialize();
     _controller = controller;
     _frames = StreamController<LumaFrame>();
     await controller.startImageStream(_onImage);
   }
+
+  ImageFormatGroup get _preferredImageFormat => switch (defaultTargetPlatform) {
+    TargetPlatform.android => ImageFormatGroup.nv21,
+    TargetPlatform.windows => ImageFormatGroup.bgra8888,
+    _ => ImageFormatGroup.yuv420,
+  };
 
   void _onImage(CameraImage image) {
     final now = DateTime.now();

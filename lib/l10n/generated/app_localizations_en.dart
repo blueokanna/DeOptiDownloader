@@ -154,7 +154,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noSignalBody =>
-      'Make sure the sender is streaming. If it still fails, try sender settings of 24 fps and 1465-byte frames.';
+      'Keep the whole QR code and its white border inside the viewfinder, avoiding glare, obstructions, and low screen brightness.';
 
   @override
   String get progressFrames => 'Frames';

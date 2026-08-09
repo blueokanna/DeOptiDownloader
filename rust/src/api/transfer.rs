@@ -26,6 +26,10 @@ use crate::api::types::{
 /// sender's dropdown. All of them fit a Version-40 QR at ECC level L.
 const FRAME_SIZE_OPTIONS: [usize; 6] = [500, 1000, 1465, 1850, 2331, 2953];
 
+/// Default balances throughput with enough physical pixels per QR module for
+/// reliable screen-to-camera capture on typical 1080p phones.
+const DEFAULT_FRAME_SIZE: usize = 2331;
+
 /// Number of extra frames (as a fraction of K) the receiver may need on a
 /// noisy channel before the fountain solves. Used for progress estimation.
 const FOUNTAIN_OVERHEAD: f64 = 1.15;
@@ -61,9 +65,9 @@ pub fn frame_size_options() -> Vec<u32> {
     FRAME_SIZE_OPTIONS.iter().map(|&v| v as u32).collect()
 }
 
-/// Default frame size (Version-40 QR, maximum throughput).
+/// Default frame size (QR Version 36, balanced for real camera capture).
 pub fn default_frame_size() -> u32 {
-    FRAME_SIZE_OPTIONS[FRAME_SIZE_OPTIONS.len() - 1] as u32
+    DEFAULT_FRAME_SIZE as u32
 }
 
 /// Source blocks a payload splits into at a given frame size.

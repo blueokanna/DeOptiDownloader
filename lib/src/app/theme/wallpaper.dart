@@ -85,11 +85,16 @@ class WallpaperBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final image = _resolveImage();
-    if (image == null) {
+    final provider = wallpaperImageProvider(spec);
+    if (provider == null) {
       return child;
     }
-    Widget layer = image;
+    Widget layer = Image(
+      image: provider,
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      filterQuality: FilterQuality.medium,
+    );
     if (spec.effectiveBlur > 0.01) {
       layer = ImageFiltered(
         imageFilter: ImageFilter.blur(
@@ -107,41 +112,32 @@ class WallpaperBackground extends StatelessWidget {
       ],
     );
   }
+}
 
-  Widget? _resolveImage() {
-    switch (spec.kind) {
-      case WallpaperKind.none:
+/// Resolves the stable cache key used both for preloading and painting.
+ImageProvider<Object>? wallpaperImageProvider(WallpaperSpec spec) {
+  switch (spec.kind) {
+    case WallpaperKind.none:
+      return null;
+    case WallpaperKind.builtin:
+      return AssetImage('assets/images/wallpapers/${spec.assetId}.png');
+    case WallpaperKind.custom:
+      final path = spec.imagePath;
+      if (path == null || path.isEmpty) {
         return null;
-      case WallpaperKind.builtin:
-        return Image.asset(
-          'assets/images/wallpapers/${spec.assetId}.png',
-          fit: BoxFit.cover,
-          gaplessPlayback: true,
-        );
-      case WallpaperKind.custom:
-        final path = spec.imagePath;
-        if (path == null || path.isEmpty) {
+      }
+      if (path.startsWith('data:')) {
+        const header = 'base64,';
+        final idx = path.indexOf(header);
+        if (idx < 0) {
           return null;
         }
-        if (path.startsWith('data:')) {
-          // Web persistence: base64 data URI.
-          final header = 'base64,';
-          final idx = path.indexOf(header);
-          if (idx < 0) {
-            return null;
-          }
-          try {
-            final bytes = base64Decode(path.substring(idx + header.length));
-            return Image.memory(
-              bytes,
-              fit: BoxFit.cover,
-              gaplessPlayback: true,
-            );
-          } catch (_) {
-            return null;
-          }
+        try {
+          return MemoryImage(base64Decode(path.substring(idx + header.length)));
+        } catch (_) {
+          return null;
         }
-        return Image.file(File(path), fit: BoxFit.cover, gaplessPlayback: true);
-    }
+      }
+      return FileImage(File(path));
   }
 }
