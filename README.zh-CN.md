@@ -259,6 +259,12 @@ docker run --rm -p 8080:8080 deopti-downloader
 `Dockerfile` 为多阶段构建：构建 Flutter Web 产物 + Rust WASM，编译纯 std 的
 `deopti-server`，然后由它托管产物——无 nginx、无第三方服务。
 
+Flutter 从官方发布归档安装并固定到项目的工具链版本（**3.44.6 / Dart 3.12.2**，
+与 CI 使用的一致），保证容器构建可复现。不使用预构建的 "flutter" Docker 镜像，
+因为 `ghcr.io/cirruslabs/flutter` 自 2026-05-01 起已停止更新，其 `stable` 标签
+携带的 Dart SDK 过旧（3.12.0），无法解析已锁定的 `pubspec.lock`（要求
+`dart: >=3.12.2`）。
+
 ## 加密（可选）
 
 未加密时，任何对准屏幕的摄像头都能读取传输内容。若需保密，可在原生目标上启用

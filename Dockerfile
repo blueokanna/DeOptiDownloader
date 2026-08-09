@@ -5,10 +5,31 @@
 
 # ---------------------------------------------------------------------------
 # Stage 1 — build: Flutter Web bundle + Rust WASM + the deopti-server binary.
+#
+# Flutter is installed from the official release archive and pinned to the
+# exact version the project is developed against (3.44.6 / Dart 3.12.2 — the
+# same version CI uses, see .metadata). Prebuilt "flutter" Docker images are
+# deliberately NOT used: ghcr.io/cirruslabs/flutter stopped being updated on
+# 2026-05-01 and its `stable` tag ships Dart 3.12.0, which cannot resolve the
+# committed pubspec.lock (its dependency graph requires `dart: >=3.12.2`).
 # ---------------------------------------------------------------------------
-FROM ghcr.io/cirruslabs/flutter:stable AS build
+FROM debian:bookworm-slim AS build
+
+# Flutter 3.44.6 (Dart 3.12.2) — must match CI's pinned version.
+ENV FLUTTER_VERSION=3.44.6
+ENV FLUTTER_ROOT=/opt/flutter
+ENV PATH="${FLUTTER_ROOT}/bin:${PATH}"
 
 WORKDIR /app
+
+# Minimal system packages for `flutter build web` + the Rust toolchain.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      curl \
+      git \
+      unzip \
+      xz-utils \
+    && rm -rf /var/lib/apt/lists/*
 
 # Rust toolchain: nightly (FRB build-web defaults to nightly + -Z build-std),
 # wasm32 target, rust-src component for build-std, plus prebuilt wasm-pack and
@@ -23,6 +44,15 @@ RUN curl -sSL https://github.com/rustwasm/wasm-pack/releases/download/v0.15.0/wa
       | tar -xz -C /usr/local/bin --strip-components=1 wasm-pack-v0.15.0-x86_64-unknown-linux-musl/wasm-pack \
  && curl -sSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.92/wasm-bindgen-0.2.92-x86_64-unknown-linux-musl.tar.gz \
       | tar -xz -C /usr/local/bin --strip-components=1 wasm-bindgen-0.2.92-x86_64-unknown-linux-musl/wasm-bindgen
+
+# Install the pinned Flutter SDK from the official release archive (Dart
+# 3.12.2, satisfies the locked `dart: >=3.12.2` requirement). Kept in its own
+# layer so the ~600 MB download is cached across rebuilds.
+RUN curl -sSL -o /tmp/flutter.tar.xz \
+      "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz" \
+    && tar -xJf /tmp/flutter.tar.xz -C /opt \
+    && rm /tmp/flutter.tar.xz \
+    && flutter --version
 
 # 1) Manifests first for layer caching.
 COPY pubspec.yaml pubspec.lock analysis_options.yaml flutter_rust_bridge.yaml ./

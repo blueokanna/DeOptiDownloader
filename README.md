@@ -293,6 +293,13 @@ docker run --rm -p 8080:8080 deopti-downloader
 compiles the std-only `deopti-server`, then serves the bundle with it — no
 nginx, no third-party service.
 
+Flutter is installed from the official release archive and pinned to the
+project's toolchain (**3.44.6 / Dart 3.12.2**, the same version CI uses), so
+the container build is deterministic. Prebuilt "flutter" Docker images are
+not used because `ghcr.io/cirruslabs/flutter` stopped being updated on
+2026-05-01 and its `stable` tag ships an older Dart SDK (3.12.0) that cannot
+resolve the committed `pubspec.lock` (which requires `dart: >=3.12.2`).
+
 ## Encryption (opt-in)
 
 Plain transfers are readable by any camera pointed at the screen. For
