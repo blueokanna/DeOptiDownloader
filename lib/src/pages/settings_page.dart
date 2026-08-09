@@ -21,13 +21,16 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _pickingCustom = false;
+  bool _initialized = false;
   final TextEditingController _judgeKeyController = TextEditingController();
 
   @override
-  void initState() {
-    super.initState();
-    _judgeKeyController.text =
-        appSettingsOf(context).judgeSecretKey ?? '';
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      _judgeKeyController.text = appSettingsOf(context).judgeSecretKey ?? '';
+      _initialized = true;
+    }
   }
 
   @override
@@ -97,15 +100,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ],
               selected: {settings.themeMode},
-              onSelectionChanged: (sel) =>
-                  settings.setThemeMode(sel.first),
+              onSelectionChanged: (sel) => settings.setThemeMode(sel.first),
             ),
             const SizedBox(height: 12),
             Text(
               s.themeHint,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -115,65 +117,108 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildThemePicker(AppLocalizations s, AppSettings settings) {
     final scheme = Theme.of(context).colorScheme;
-    final bright = Theme.of(context).brightness;
-    final themes = ThemeId.ofBrightness(bright);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(s.theme, style: Theme.of(context).textTheme.titleSmall),
+            Text(s.colorSpec, style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 12),
             Wrap(
               spacing: 12,
               runSpacing: 12,
               children: [
-                for (final t in themes)
-                  _ThemeTile(
-                    themeId: t,
-                    selected: settings.themeId == t,
-                    label: _themeLabel(s, t),
-                    onTap: () => settings.setTheme(t),
+                for (final spec in ColorSpec.values)
+                  _ColorSpecTile(
+                    colorSpec: spec,
+                    colorStyle: settings.colorStyle,
+                    brightness: Theme.of(context).brightness,
+                    selected: settings.colorSpec == spec,
+                    label: _colorSpecLabel(s, spec),
+                    onTap: () => settings.setColorSpec(spec),
                   ),
               ],
             ),
-            const SizedBox(height: 12),
-            if (settings.themeId.amoled)
-              Text(
-                s.themeAmoledHint,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+            const Divider(height: 28),
+            DropdownButtonFormField<ColorStyle>(
+              initialValue: settings.colorStyle,
+              decoration: InputDecoration(
+                labelText: s.colorStyle,
+                prefixIcon: const Icon(Icons.auto_awesome_outlined),
               ),
+              items: [
+                for (final style in ColorStyle.values)
+                  DropdownMenuItem(
+                    value: style,
+                    child: Text(_colorStyleLabel(s, style)),
+                  ),
+              ],
+              onChanged: (style) {
+                if (style != null) {
+                  settings.setColorStyle(style);
+                }
+              },
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.contrast_outlined),
+              title: Text(s.themeAmoled),
+              subtitle: Text(s.themeAmoledHint),
+              value: settings.amoled,
+              onChanged: settings.setAmoled,
+            ),
+            Text(
+              s.themeHint,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            ),
           ],
         ),
       ),
     );
   }
 
-  String _themeLabel(AppLocalizations s, ThemeId t) => switch (t) {
-        ThemeId.indigoLight => s.themeIndigoLight,
-        ThemeId.indigoDark => s.themeIndigoDark,
-        ThemeId.amoledDark => s.themeAmoled,
-        ThemeId.violet => s.themeViolet,
-        ThemeId.midnight => s.themeMidnight,
-        ThemeId.sunset => s.themeSunset,
-        ThemeId.monochrome => s.themeMonochrome,
+  String _colorSpecLabel(AppLocalizations s, ColorSpec spec) => switch (spec) {
+    ColorSpec.indigo => s.colorSpecIndigo,
+    ColorSpec.cyan => s.colorSpecCyan,
+    ColorSpec.emerald => s.colorSpecEmerald,
+    ColorSpec.violet => s.colorSpecViolet,
+    ColorSpec.sunset => s.colorSpecSunset,
+    ColorSpec.neutral => s.colorSpecNeutral,
+  };
+
+  String _colorStyleLabel(AppLocalizations s, ColorStyle style) =>
+      switch (style) {
+        ColorStyle.tonalSpot => s.colorStyleTonalSpot,
+        ColorStyle.expressive => s.colorStyleExpressive,
+        ColorStyle.fidelity => s.colorStyleFidelity,
+        ColorStyle.vibrant => s.colorStyleVibrant,
+        ColorStyle.neutral => s.colorStyleNeutral,
+        ColorStyle.monochrome => s.colorStyleMonochrome,
       };
 
   Widget _buildLanguage(AppLocalizations s, AppSettings settings) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.translate),
-            const SizedBox(width: 12),
-            Expanded(child: Text(s.language)),
-            DropdownButton<String?>(
-              value: settings.languageCode,
-              underline: const SizedBox.shrink(),
+            Row(
+              children: [
+                const Icon(Icons.translate),
+                const SizedBox(width: 12),
+                Text(s.language),
+              ],
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String?>(
+              initialValue: settings.languageCode,
+              isExpanded: true,
+              decoration: InputDecoration(labelText: s.language),
               items: [
                 DropdownMenuItem(value: null, child: Text(s.languageSystem)),
                 const DropdownMenuItem(value: 'en', child: Text('English')),
@@ -212,11 +257,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 leading: const Icon(Icons.block_outlined),
                 title: Text(s.wallpaperNone),
                 subtitle: Text(s.wallpaperNoneHint),
-                trailing: const Radio<WallpaperKind>(
-                  value: WallpaperKind.none,
-                ),
-                onTap: () =>
-                    settings.setWallpaper(const WallpaperSpec.none()),
+                trailing: const Radio<WallpaperKind>(value: WallpaperKind.none),
+                onTap: () => settings.setWallpaper(const WallpaperSpec.none()),
               ),
             ),
             const Divider(height: 1),
@@ -235,11 +277,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 for (final id in kBuiltinWallpapers)
                   _WallpaperTile(
                     assetId: id,
-                    selected: settings.wallpaper.kind == WallpaperKind.builtin &&
+                    selected:
+                        settings.wallpaper.kind == WallpaperKind.builtin &&
                         settings.wallpaper.assetId == id,
-                    onTap: () => settings.setWallpaper(
-                      WallpaperSpec.builtin(id),
-                    ),
+                    onTap: () =>
+                        settings.setWallpaper(WallpaperSpec.builtin(id)),
                   ),
               ],
             ),
@@ -287,9 +329,8 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         Text(
                           s.wallpaperBlurHint,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
                         ),
                       ],
                     ),
@@ -340,8 +381,9 @@ class _SettingsPageState extends State<SettingsPage> {
       await settings.setCustomWallpaper(bytes);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
       }
     } finally {
       if (mounted) {
@@ -359,13 +401,16 @@ class _SettingsPageState extends State<SettingsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(s.judgeSecretKey, style: Theme.of(context).textTheme.titleSmall),
+            Text(
+              s.judgeSecretKey,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
             const SizedBox(height: 4),
             Text(
               s.judgeSecretKeyHint,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -412,14 +457,15 @@ class _SettingsPageState extends State<SettingsPage> {
       settings.setJudgeSecretKey(hex);
       _judgeKeyController.text = hex;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(s.judgeKeyCopied)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(s.judgeKeyCopied)));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
       }
     }
   }
@@ -452,9 +498,9 @@ class _SectionTitle extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             label,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -462,24 +508,30 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _ThemeTile extends StatelessWidget {
-  const _ThemeTile({
-    required this.themeId,
+class _ColorSpecTile extends StatelessWidget {
+  const _ColorSpecTile({
+    required this.colorSpec,
+    required this.colorStyle,
+    required this.brightness,
     required this.selected,
     required this.label,
     required this.onTap,
   });
 
-  final ThemeId themeId;
+  final ColorSpec colorSpec;
+  final ColorStyle colorStyle;
+  final Brightness brightness;
   final bool selected;
   final String label;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = buildTheme(themeId, brightness: themeId.brightness).colorScheme;
-    final primary = themeId.amoled ? Colors.white : scheme.primary;
-    final surface = themeId.amoled ? Colors.black : scheme.surfaceContainerHighest;
+    final scheme = buildTheme(
+      colorSpec,
+      colorStyle,
+      brightness: brightness,
+    ).colorScheme;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(Shape.md),
@@ -503,15 +555,10 @@ class _ThemeTile extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: surface,
+                color: scheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(Shape.sm),
               ),
-              child: Icon(
-                themeId.amoled
-                    ? Icons.dark_mode_outlined
-                    : Icons.palette_outlined,
-                color: primary,
-              ),
+              child: Icon(Icons.palette_outlined, color: scheme.primary),
             ),
             const SizedBox(height: 6),
             Text(

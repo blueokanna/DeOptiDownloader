@@ -47,13 +47,17 @@ class _DeOptiAppState extends State<DeOptiApp> {
             GlobalCupertinoLocalizations.delegate,
           ],
           theme: buildTheme(
-            settings.themeId,
+            settings.colorSpec,
+            settings.colorStyle,
             brightness: brightness,
+            amoled: settings.amoled,
             translucent: wallpaperActive,
           ),
           darkTheme: buildTheme(
-            settings.themeId,
+            settings.colorSpec,
+            settings.colorStyle,
             brightness: Brightness.dark,
+            amoled: settings.amoled,
             translucent: wallpaperActive,
           ),
           themeMode: switch (settings.themeMode) {
@@ -82,14 +86,11 @@ class _DeOptiAppState extends State<DeOptiApp> {
 /// Injects the [AppSettings] controller into the widget tree; widgets that
 /// depend on it rebuild when settings change.
 class _SettingsScope extends InheritedNotifier<AppSettings> {
-  const _SettingsScope({
-    required AppSettings settings,
-    required super.child,
-  }) : super(notifier: settings);
+  const _SettingsScope({required AppSettings settings, required super.child})
+    : super(notifier: settings);
 
   static AppSettings of(BuildContext context) {
-    final scope = context
-        .dependOnInheritedWidgetOfExactType<_SettingsScope>();
+    final scope = context.dependOnInheritedWidgetOfExactType<_SettingsScope>();
     assert(scope != null, 'No AppSettings found above this context');
     return scope!.notifier!;
   }

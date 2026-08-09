@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scan_downloader/src/app/app.dart';
 import 'package:scan_downloader/src/app/settings_controller.dart';
+import 'package:scan_downloader/src/app/theme/app_themes.dart';
+import 'package:scan_downloader/src/app/theme/wallpaper.dart';
 import 'package:scan_downloader/src/rust/api/transfer.dart';
 import 'package:scan_downloader/src/rust/frb_generated.dart';
 
@@ -31,6 +33,43 @@ void main() {
     expect(supported, isA<bool>());
     final max = maxFileBytes();
     expect(max, 64 * 1024 * 1024);
+  });
+
+  test(
+    'every ColorSpec and ColorStyle combination builds in light and dark',
+    () {
+      for (final spec in ColorSpec.values) {
+        for (final style in ColorStyle.values) {
+          final light = buildTheme(spec, style, brightness: Brightness.light);
+          final dark = buildTheme(spec, style, brightness: Brightness.dark);
+          expect(light.colorScheme.brightness, Brightness.light);
+          expect(dark.colorScheme.brightness, Brightness.dark);
+          expect(light.useMaterial3, isTrue);
+          expect(dark.useMaterial3, isTrue);
+        }
+      }
+
+      final amoled = buildTheme(
+        ColorSpec.indigo,
+        ColorStyle.expressive,
+        brightness: Brightness.dark,
+        amoled: true,
+      );
+      expect(amoled.colorScheme.surface, Colors.black);
+      expect(amoled.scaffoldBackgroundColor, Colors.black);
+    },
+  );
+
+  test('wallpaper blur updates preserve the selected background', () {
+    final builtin = const WallpaperSpec.builtin('aurora').copyWith(blur: 12);
+    expect(builtin.kind, WallpaperKind.builtin);
+    expect(builtin.assetId, 'aurora');
+    expect(builtin.effectiveBlur, 12);
+
+    final custom = const WallpaperSpec.custom('custom.png').copyWith(blur: 30);
+    expect(custom.kind, WallpaperKind.custom);
+    expect(custom.imagePath, 'custom.png');
+    expect(custom.effectiveBlur, 24);
   });
 
   test('Session manifest round-trips through the bridge', () {
@@ -69,8 +108,7 @@ void main() {
     expect(decodeManifestFfi(bytes: [0xD1, 0x0F, 0x00, 0x00, 0x00]), isNull);
   });
 
-  test('JRC keygen → pack → judge-recover round-trips through the bridge',
-      () {
+  test('JRC keygen → pack → judge-recover round-trips through the bridge', () {
     if (!encryptionSupported()) {
       return; // Web build without the encryption feature.
     }
@@ -87,7 +125,12 @@ void main() {
     );
     expect(packed.envelope, isNotEmpty);
     // The envelope is a JRC transcript, not a DCF3 container.
-    expect(packed.envelope.sublist(0, 4), [0x4A, 0x52, 0x43, 0x01]); // "JRC\x01"
+    expect(packed.envelope.sublist(0, 4), [
+      0x4A,
+      0x52,
+      0x43,
+      0x01,
+    ]); // "JRC\x01"
 
     final file = unpackFileJrcFfi(
       envelope: packed.envelope,
@@ -105,5 +148,22 @@ void main() {
     // Both mode cards are present.
     expect(find.byIcon(Icons.send_outlined), findsOneWidget);
     expect(find.byIcon(Icons.camera_alt_outlined), findsOneWidget);
+  });
+
+  testWidgets('settings page has no narrow-screen layout overflow', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final settings = AppSettings.create();
+    await tester.pumpWidget(DeOptiApp(settings: settings));
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    await tester.fling(find.byType(ListView), const Offset(0, -1200), 1200);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 }

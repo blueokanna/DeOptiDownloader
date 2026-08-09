@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'src/app/app.dart';
 import 'src/app/settings_controller.dart';
@@ -7,9 +6,7 @@ import 'src/rust/frb_generated.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  // Google Fonts are bundled in assets — never fetch from the network (works
-  // offline, in China, and in CI).
-  GoogleFonts.config.allowRuntimeFetching = false;
+  // The Noto Sans SC variable font is bundled and never fetched at runtime.
   runApp(const _BootstrapApp());
 }
 

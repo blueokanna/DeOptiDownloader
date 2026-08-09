@@ -1,21 +1,18 @@
 /// Material 3 design system for DeOptiDownloader.
 ///
-/// One place owns every visual decision: the theme registry (seed color ×
-/// Material 3 "color style" × brightness), the typography (bundled Noto Sans
+/// One place owns every visual decision: ColorSpec (seed color) x ColorStyle
+/// (Material dynamic scheme variant), the typography (bundled Noto Sans
 /// SC), the shape scale and the component themes derived from them. Pages
 /// only reference semantic tokens from `Theme.of(context)` — they never
 /// hard-code radii, durations or fonts.
 ///
-/// The registry exposes a handful of curated themes, including an AMOLED
-/// variant whose surfaces are pure black for OLED screens. Every palette is
-/// produced by `ColorScheme.fromSeed` with a `DynamicSchemeVariant` (the
-/// Material 3 color style), so contrast and tonal relationships stay
-/// algorithmically correct while the seed and style give each theme its
-/// character.
+/// Color specification, style, brightness and AMOLED surfaces are independent.
+/// Every palette is produced by `ColorScheme.fromSeed` with a
+/// `DynamicSchemeVariant`, so contrast and tonal relationships stay
+/// algorithmically correct for every supported combination.
 library;
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Motion durations for the whole app (Material motion tokens).
 abstract final class Motion {
@@ -62,110 +59,84 @@ enum AppThemeMode {
   }
 }
 
-/// A curated Material 3 theme: seed color × color style × base brightness.
-///
-/// The `variant` is the Material 3 "color style" (`DynamicSchemeVariant`):
-/// tonal spot, expressive, fidelity, vibrant, monochrome, … Each produces a
-/// different but always accessible palette from the same seed.
-enum ThemeId {
-  indigoLight(
-    id: 'indigo_light',
-    seed: Color(0xFF3D5AFE),
-    variant: DynamicSchemeVariant.tonalSpot,
-    brightness: Brightness.light,
-  ),
-  indigoDark(
-    id: 'indigo_dark',
-    seed: Color(0xFF3D5AFE),
-    variant: DynamicSchemeVariant.tonalSpot,
-    brightness: Brightness.dark,
-  ),
-  amoledDark(
-    id: 'amoled_dark',
-    seed: Color(0xFF9FA8FF),
-    variant: DynamicSchemeVariant.tonalSpot,
-    brightness: Brightness.dark,
-    amoled: true,
-  ),
-  violet(
-    id: 'violet',
-    seed: Color(0xFF7C4DFF),
-    variant: DynamicSchemeVariant.expressive,
-    brightness: Brightness.light,
-  ),
-  midnight(
-    id: 'midnight',
-    seed: Color(0xFF3949AB),
-    variant: DynamicSchemeVariant.fidelity,
-    brightness: Brightness.dark,
-  ),
-  sunset(
-    id: 'sunset',
-    seed: Color(0xFFFF6E40),
-    variant: DynamicSchemeVariant.vibrant,
-    brightness: Brightness.dark,
-  ),
-  monochrome(
-    id: 'monochrome',
-    seed: Color(0xFF9E9E9E),
-    variant: DynamicSchemeVariant.monochrome,
-    brightness: Brightness.light,
-  );
+/// Seed-color specifications offered by the app. Brightness and palette
+/// generation style are deliberately independent from this choice.
+enum ColorSpec {
+  indigo(id: 'indigo', seed: Color(0xFF3D5AFE)),
+  cyan(id: 'cyan', seed: Color(0xFF006C7A)),
+  emerald(id: 'emerald', seed: Color(0xFF006B57)),
+  violet(id: 'violet', seed: Color(0xFF7C4DFF)),
+  sunset(id: 'sunset', seed: Color(0xFFB33C16)),
+  neutral(id: 'neutral', seed: Color(0xFF60646C));
 
-  const ThemeId({
-    required this.id,
-    required this.seed,
-    required this.variant,
-    required this.brightness,
-    this.amoled = false,
-  });
+  const ColorSpec({required this.id, required this.seed});
 
   final String id;
   final Color seed;
-  final DynamicSchemeVariant variant;
-  final Brightness brightness;
 
-  /// Pure-black surfaces for OLED screens (only meaningful for dark themes).
-  final bool amoled;
-
-  static ThemeId? fromId(String? id) {
+  static ColorSpec? fromId(String? id) {
     if (id == null) {
       return null;
     }
-    for (final t in ThemeId.values) {
-      if (t.id == id) {
-        return t;
+    for (final spec in ColorSpec.values) {
+      if (spec.id == id) {
+        return spec;
       }
     }
     return null;
   }
+}
 
-  /// All themes, grouped by effective brightness for the settings page.
-  static List<ThemeId> ofBrightness(Brightness brightness) => values
-      .where((t) => t.brightness == brightness || t.amoled)
-      .toList(growable: false);
+/// Material 3 palette generation styles backed by Flutter's real
+/// [DynamicSchemeVariant] implementation.
+enum ColorStyle {
+  tonalSpot(id: 'tonal_spot', variant: DynamicSchemeVariant.tonalSpot),
+  expressive(id: 'expressive', variant: DynamicSchemeVariant.expressive),
+  fidelity(id: 'fidelity', variant: DynamicSchemeVariant.fidelity),
+  vibrant(id: 'vibrant', variant: DynamicSchemeVariant.vibrant),
+  neutral(id: 'neutral', variant: DynamicSchemeVariant.neutral),
+  monochrome(id: 'monochrome', variant: DynamicSchemeVariant.monochrome);
+
+  const ColorStyle({required this.id, required this.variant});
+
+  final String id;
+  final DynamicSchemeVariant variant;
+
+  static ColorStyle? fromId(String? id) {
+    if (id == null) {
+      return null;
+    }
+    for (final style in ColorStyle.values) {
+      if (style.id == id) {
+        return style;
+      }
+    }
+    return null;
+  }
 }
 
 /// A convenience accessor matching the old `theme.dart` API.
 const Color kSeedColor = Color(0xFF3D5AFE);
 
-/// Builds the full [ThemeData] for [theme] at [brightness].
+/// Builds the full [ThemeData] for [colorSpec] and [colorStyle].
 ///
 /// When [translucent] is true (a wallpaper is active) the surface tones are
 /// given a small alpha so the background image glows through the UI; the
 /// readable on-* colors are untouched, so contrast is preserved.
 ThemeData buildTheme(
-  ThemeId theme, {
+  ColorSpec colorSpec,
+  ColorStyle colorStyle, {
   required Brightness brightness,
+  bool amoled = false,
   bool translucent = false,
 }) {
   var scheme = ColorScheme.fromSeed(
-    seedColor: theme.seed,
+    seedColor: colorSpec.seed,
     brightness: brightness,
-    dynamicSchemeVariant: theme.variant,
+    dynamicSchemeVariant: colorStyle.variant,
   );
 
-  if (theme.amoled) {
+  if (amoled && brightness == Brightness.dark) {
     // True black surfaces for OLED: keep the seeded tonal palette for
     // containers/primary but pin the base surfaces to pure black.
     scheme = scheme.copyWith(
@@ -188,17 +159,24 @@ ThemeData buildTheme(
     final surface = scheme.surface.withValues(alpha: 0.84);
     scheme = scheme.copyWith(
       surface: surface,
-      surfaceContainerLowest: scheme.surfaceContainerLowest.withValues(alpha: 0.84),
+      surfaceContainerLowest: scheme.surfaceContainerLowest.withValues(
+        alpha: 0.84,
+      ),
       surfaceContainerLow: scheme.surfaceContainerLow.withValues(alpha: 0.84),
       surfaceContainer: scheme.surfaceContainer.withValues(alpha: 0.80),
       surfaceContainerHigh: scheme.surfaceContainerHigh.withValues(alpha: 0.80),
-      surfaceContainerHighest: scheme.surfaceContainerHighest.withValues(alpha: 0.76),
+      surfaceContainerHighest: scheme.surfaceContainerHighest.withValues(
+        alpha: 0.76,
+      ),
     );
   }
 
   // Bundled Noto Sans SC — never touches the network.
-  final baseText = ThemeData(brightness: brightness).textTheme;
-  final textTheme = GoogleFonts.notoSansScTextTheme(baseText).apply(
+  final baseText = ThemeData(
+    brightness: brightness,
+    fontFamily: 'NotoSansSC',
+  ).textTheme;
+  final textTheme = baseText.apply(
     bodyColor: scheme.onSurface,
     displayColor: scheme.onSurface,
   );
@@ -207,6 +185,7 @@ ThemeData buildTheme(
     useMaterial3: true,
     brightness: brightness,
     colorScheme: scheme,
+    fontFamily: 'NotoSansSC',
     textTheme: textTheme,
     visualDensity: VisualDensity.adaptivePlatformDensity,
     splashFactory: InkSparkle.splashFactory,

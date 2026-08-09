@@ -491,7 +491,7 @@ abstract class AppLocalizations {
   /// No description provided for @aboutBody.
   ///
   /// In en, this message translates to:
-  /// **'Rust core (deopti_transfer + rustbinary) does the fountain coding, container packing, session manifest and QR codec; Flutter renders the QR stream and reads the camera. Works on Android, iOS, HarmonyOS Next, Windows, macOS, Linux, Web/WASM and Docker.'**
+  /// **'The Rust core handles fountain coding, container integrity, session manifests and QR codecs. Flutter provides sending and camera receiving on supported native and web targets.'**
   String get aboutBody;
 
   /// No description provided for @unsupportedPlatform.
@@ -545,8 +545,92 @@ abstract class AppLocalizations {
   /// No description provided for @themeHint.
   ///
   /// In en, this message translates to:
-  /// **'Material Design 3 color schemes with adaptive shapes.'**
+  /// **'Material Design 3 palettes and shape tokens apply across the interface.'**
   String get themeHint;
+
+  /// No description provided for @colorSpec.
+  ///
+  /// In en, this message translates to:
+  /// **'Color specification'**
+  String get colorSpec;
+
+  /// No description provided for @colorSpecIndigo.
+  ///
+  /// In en, this message translates to:
+  /// **'Indigo'**
+  String get colorSpecIndigo;
+
+  /// No description provided for @colorSpecCyan.
+  ///
+  /// In en, this message translates to:
+  /// **'Cyan'**
+  String get colorSpecCyan;
+
+  /// No description provided for @colorSpecEmerald.
+  ///
+  /// In en, this message translates to:
+  /// **'Emerald'**
+  String get colorSpecEmerald;
+
+  /// No description provided for @colorSpecViolet.
+  ///
+  /// In en, this message translates to:
+  /// **'Violet'**
+  String get colorSpecViolet;
+
+  /// No description provided for @colorSpecSunset.
+  ///
+  /// In en, this message translates to:
+  /// **'Sunset'**
+  String get colorSpecSunset;
+
+  /// No description provided for @colorSpecNeutral.
+  ///
+  /// In en, this message translates to:
+  /// **'Neutral'**
+  String get colorSpecNeutral;
+
+  /// No description provided for @colorStyle.
+  ///
+  /// In en, this message translates to:
+  /// **'Color style'**
+  String get colorStyle;
+
+  /// No description provided for @colorStyleTonalSpot.
+  ///
+  /// In en, this message translates to:
+  /// **'Tonal spot'**
+  String get colorStyleTonalSpot;
+
+  /// No description provided for @colorStyleExpressive.
+  ///
+  /// In en, this message translates to:
+  /// **'Expressive'**
+  String get colorStyleExpressive;
+
+  /// No description provided for @colorStyleFidelity.
+  ///
+  /// In en, this message translates to:
+  /// **'Fidelity'**
+  String get colorStyleFidelity;
+
+  /// No description provided for @colorStyleVibrant.
+  ///
+  /// In en, this message translates to:
+  /// **'Vibrant'**
+  String get colorStyleVibrant;
+
+  /// No description provided for @colorStyleNeutral.
+  ///
+  /// In en, this message translates to:
+  /// **'Neutral'**
+  String get colorStyleNeutral;
+
+  /// No description provided for @colorStyleMonochrome.
+  ///
+  /// In en, this message translates to:
+  /// **'Monochrome'**
+  String get colorStyleMonochrome;
 
   /// No description provided for @themeMode.
   ///

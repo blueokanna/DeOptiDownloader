@@ -205,7 +205,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aboutBody =>
-      'Rust 核心（deopti_transfer + rustbinary）负责喷泉码、容器打包、会话清单与二维码编解码；Flutter 负责渲染二维码流并读取摄像头。支持 Android、iOS、HarmonyOS Next、Windows、macOS、Linux、Web/WASM 与 Docker。';
+      'Rust 核心负责喷泉码、容器完整性、会话清单与二维码编解码；Flutter 在受支持的原生平台和 Web 平台提供发送与摄像头接收功能。';
 
   @override
   String get unsupportedPlatform => '此平台暂不支持摄像头采集。';
@@ -232,7 +232,49 @@ class AppLocalizationsZh extends AppLocalizations {
   String get theme => '主题';
 
   @override
-  String get themeHint => '基于 Material Design 3 的配色方案与自适应图形。';
+  String get themeHint => 'Material Design 3 配色与形状令牌会应用到整个界面。';
+
+  @override
+  String get colorSpec => '色彩规范';
+
+  @override
+  String get colorSpecIndigo => '靛蓝';
+
+  @override
+  String get colorSpecCyan => '青色';
+
+  @override
+  String get colorSpecEmerald => '翡翠绿';
+
+  @override
+  String get colorSpecViolet => '紫罗兰';
+
+  @override
+  String get colorSpecSunset => '日落';
+
+  @override
+  String get colorSpecNeutral => '中性色';
+
+  @override
+  String get colorStyle => '色彩风格';
+
+  @override
+  String get colorStyleTonalSpot => '色调点';
+
+  @override
+  String get colorStyleExpressive => '表现力';
+
+  @override
+  String get colorStyleFidelity => '保真';
+
+  @override
+  String get colorStyleVibrant => '鲜明';
+
+  @override
+  String get colorStyleNeutral => '柔和';
+
+  @override
+  String get colorStyleMonochrome => '单色';
 
   @override
   String get themeMode => '主题模式';

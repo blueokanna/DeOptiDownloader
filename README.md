@@ -40,12 +40,11 @@ Rust 核心 + Flutter 跨端实现，支持发送/接收文件与文本片段。
   camera sees only a hiding commitment + ciphertext while the judge alone
   recovers the file with the matching secret key. Both are opt-in and gated
   behind the `encryption` Cargo feature on every native build.
-- **Material 3 design system** — Google Fonts (Noto Sans SC, bundled for
-  offline use on every platform), a curated theme registry (Indigo light/dark,
-  **AMOLED Dark** with pure-black OLED surfaces, Violet *expressive*, Midnight
-  *fidelity*, Sunset *vibrant*, Monochrome), each built with
-  `ColorScheme.fromSeed` + a Material 3 `DynamicSchemeVariant` (color style)
-  and the M3 shape/motion tokens.
+- **Material 3 design system** — bundled Noto Sans SC variable typography,
+  six independent `ColorSpec` seed palettes, six `ColorStyle` choices backed
+  by real `DynamicSchemeVariant` values, system/light/dark modes, and an
+  **AMOLED Dark** pure-black surface policy. M3 shape and motion tokens apply
+  consistently across the interface.
 - **Wallpaper & blur** — an in-app background can be turned off, set to one of
   the bundled gradient wallpapers, or set to a custom photo from the gallery,
   with a draggable gaussian-blur slider (0–24 σ) that frosts the image behind
@@ -55,8 +54,8 @@ Rust 核心 + Flutter 跨端实现，支持发送/接收文件与文本片段。
   localized Material widgets via `flutter_localizations`.
 - **Predictive back** — `android:enableOnBackInvokedCallback="true"` is set,
   so Android 13+ renders the predictive back gesture animation.
-- **Fully cross-platform** — Android, iOS, HarmonyOS Next, Windows, macOS,
-  Linux, Web/WASM and Docker (containerized web).
+- **Multi-platform** — Android, iOS, Windows, macOS and Web support sending and
+  receiving; Linux currently sends only, with browser receive as the fallback.
 - **CI-ready** — GitHub Actions runs Rust lint/tests, Flutter analyze/tests, a
   real Web/WASM build and a Docker build on every push (see
   [.github/workflows](.github/workflows)).
@@ -84,7 +83,7 @@ and extended:
 | **New:** automatic re-lock      | ✅ stream-conflict auto reset in Rust              |
 | **New:** session manifest QR    | ✅ `rustbinary`-encoded setup QR + receive preview |
 | **New:** diagnostics self-test  | ✅ `runSelfTest()` + `jrcSelfTest()` (home → bug)  |
-| **New:** Material 3 + responsive| ✅ Google Fonts, M3 tokens, adaptive layouts       |
+| **New:** Material 3 + responsive| ✅ bundled font, M3 tokens, adaptive layouts      |
 | **New:** themes + wallpaper     | ✅ AMOLED Dark etc. + blur, custom photo           |
 | **New:** i18n                   | ✅ official ARB/gen-l10n (en/zh)                   |
 
@@ -119,24 +118,13 @@ layer only adapts them to the bridge.
 
 ## Appearance: themes, wallpaper & i18n
 
-**Themes** (`lib/src/app/theme/app_themes.dart`). A curated registry of
-Material 3 themes, each built with `ColorScheme.fromSeed` + a
-`DynamicSchemeVariant` (the M3 "color style") and the shared shape/motion
-tokens:
-
-| Theme          | Seed        | Color style (variant)      | Notes                          |
-| -------------- | ----------- | -------------------------- | ------------------------------ |
-| Indigo Light   | `#3D5AFE`   | `tonalSpot`                | default                        |
-| Indigo Dark    | `#3D5AFE`   | `tonalSpot`                | default dark                   |
-| AMOLED Dark    | `#9FA8FF`   | `tonalSpot`                | pure-black surfaces (OLED)     |
-| Violet         | `#7C4DFF`   | `expressive`               | light                          |
-| Midnight       | `#3949AB`   | `fidelity`                 | dark                           |
-| Sunset         | `#FF6E40`   | `vibrant`                  | dark                           |
-| Monochrome     | `#9E9E9E`   | `monochrome`               | light                          |
-
-The settings page (home → gear icon) picks the theme, the theme mode
-(system/light/dark) and the language. A `PopScope`-friendly settings model is
-persisted with `shared_preferences` (`lib/src/app/settings_controller.dart`).
+**Themes** (`lib/src/app/theme/app_themes.dart`). `ColorSpec` selects one of
+Indigo `#3D5AFE`, Cyan `#006C7A`, Emerald `#006B57`, Violet `#7C4DFF`, Sunset
+`#B33C16`, or Neutral `#60646C`. `ColorStyle` independently selects
+`tonalSpot`, `expressive`, `fidelity`, `vibrant`, `neutral`, or `monochrome`;
+each maps directly to Flutter's `DynamicSchemeVariant`. Theme brightness and
+the AMOLED pure-black surface policy are separate settings. All settings
+persist with `shared_preferences`.
 
 **Wallpaper** (`lib/src/app/theme/wallpaper.dart`). Three kinds: *none* (no
 image, no blur control), *bundled* (five gradient wallpapers in
@@ -180,14 +168,14 @@ animation plays for the Flutter navigator (the app targets SDK 34+).
 
 | Platform        | Send | Receive | Notes                                            |
 | --------------- | :--: | :-----: | ------------------------------------------------ |
-| Android         | ✅   | ✅      | `camera` (CameraX) YUV420 image stream           |
-| iOS             | ✅   | ✅      | `camera` (AVFoundation) YUV420 image stream      |
-| HarmonyOS Next  | ✅   | ✅      | native `HarmonyCameraSource` (YUV420 + BGRA)     |
-| Windows         | ✅   | ✅      | `camera_windows` backend                         |
-| macOS           | ✅   | ✅      | `camera` (AVFoundation)                          |
-| Linux           | ✅   | ⚠️²     | no federated camera backend yet                  |
+| Android         | ✅   | ✅      | CameraX; YUV420/NV21 luma                        |
+| iOS             | ✅   | ✅      | AVFoundation; YUV420/BGRA8888                    |
+| Windows         | ✅   | ✅      | `camera_windows`; BGRA8888                       |
+| macOS           | ✅   | ✅      | AVFoundation; YUV420/BGRA8888                    |
+| Linux           | ✅   | ❌²     | no camera backend is included                    |
 | Web / WASM      | ✅   | ✅      | getUserMedia + canvas → Rust WASM decode         |
 | Docker          | ✅   | ✅      | Rust `deopti-server` serves the Web build        |
+| HarmonyOS Next  | —    | —       | adapter source exists; OHOS runner is not shipped|
 
 ² On Linux the receive page shows a clear message and suggests the browser
 build (the Docker container or any browser).
@@ -219,6 +207,11 @@ to avoid a known Windows Kotlin incremental-cache failure, and
 `rust_builder/cargokit/gradle/plugin.gradle` was patched to use Gradle's `ExecOperations`
 (Gradle 9 removed `Project.exec(Closure)`). The application id is
 `com.deopti.downloader`.
+
+Release builds never fall back to the debug key. For a signed APK/AAB, create
+the untracked `android/key.properties` with `storeFile`, `storePassword`,
+`keyAlias`, and `keyPassword`; without it Gradle produces an unsigned release
+artifact suitable for CI verification only.
 
 ## Web / WASM
 
@@ -293,12 +286,11 @@ docker run --rm -p 8080:8080 deopti-downloader
 compiles the std-only `deopti-server`, then serves the bundle with it — no
 nginx, no third-party service.
 
-Flutter is installed from the official release archive and pinned to the
-project's toolchain (**3.44.6 / Dart 3.12.2**, the same version CI uses), so
-the container build is deterministic. Prebuilt "flutter" Docker images are
-not used because `ghcr.io/cirruslabs/flutter` stopped being updated on
-2026-05-01 and its `stable` tag ships an older Dart SDK (3.12.0) that cannot
-resolve the committed `pubspec.lock` (which requires `dart: >=3.12.2`).
+The Flutter archive contains Git metadata owned by its publishing UID. The
+image extracts it with `tar --no-same-owner` and registers exactly
+`/opt/flutter` as a system `safe.directory`; this prevents Git's "dubious
+ownership" check from aborting `flutter --version` while keeping the exception
+scoped to the SDK directory.
 
 ## Encryption (opt-in)
 
@@ -344,7 +336,7 @@ lib/
   src/app/widgets/      # ModeCard and shared M3 widgets
   src/l10n/             # ARB sources + generated AppLocalizations (gen-l10n)
   src/core/transfer/    # SenderController, ReceiverController, payload
-  src/core/camera/      # CameraFrameSource + plugin / HarmonyOS / web backends
+  src/core/camera/      # camera sources + shared YUV/NV21/BGRA luma conversion
   src/core/qr/          # QrPainter / QrDisplay
   src/core/services/    # FileService (io / web), judge_keys helper
   src/core/util/        # formatBytes, best-effort ScreenKeep

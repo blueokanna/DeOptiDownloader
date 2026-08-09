@@ -27,25 +27,24 @@ const List<String> kBuiltinWallpapers = [
 ];
 
 /// Where the background image comes from.
-enum WallpaperKind {
-  none,
-  builtin,
-  custom,
-}
+enum WallpaperKind { none, builtin, custom }
 
 /// Immutable description of the current wallpaper.
 @immutable
 class WallpaperSpec {
-  const WallpaperSpec.none() : kind = WallpaperKind.none, assetId = null, imagePath = null, blur = 0;
+  const WallpaperSpec.none()
+    : kind = WallpaperKind.none,
+      assetId = null,
+      imagePath = null,
+      blur = 0;
 
-  const WallpaperSpec.builtin(this.assetId)
-      : kind = WallpaperKind.builtin,
-        imagePath = null,
-        blur = 0;
+  const WallpaperSpec.builtin(this.assetId, {this.blur = 0})
+    : kind = WallpaperKind.builtin,
+      imagePath = null;
 
   const WallpaperSpec.custom(this.imagePath, {this.blur = 0})
-      : kind = WallpaperKind.custom,
-        assetId = null;
+    : kind = WallpaperKind.custom,
+      assetId = null;
 
   final WallpaperKind kind;
   final String? assetId;
@@ -59,13 +58,16 @@ class WallpaperSpec {
   double get effectiveBlur => isActive ? blur.clamp(0, 24) : 0;
 
   WallpaperSpec copyWith({double? blur}) => switch (kind) {
-        WallpaperKind.none => const WallpaperSpec.none(),
-        WallpaperKind.builtin => WallpaperSpec.builtin(assetId!),
-        WallpaperKind.custom => WallpaperSpec.custom(
-            imagePath!,
-            blur: blur ?? this.blur,
-          ),
-      };
+    WallpaperKind.none => const WallpaperSpec.none(),
+    WallpaperKind.builtin => WallpaperSpec.builtin(
+      assetId!,
+      blur: blur ?? this.blur,
+    ),
+    WallpaperKind.custom => WallpaperSpec.custom(
+      imagePath!,
+      blur: blur ?? this.blur,
+    ),
+  };
 }
 
 /// Paints the wallpaper image (with optional gaussian blur) filling the
@@ -100,10 +102,7 @@ class WallpaperBackground extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        ColoredBox(
-          color: Theme.of(context).colorScheme.surface,
-          child: layer,
-        ),
+        ColoredBox(color: Theme.of(context).colorScheme.surface, child: layer),
         child,
       ],
     );
@@ -133,7 +132,11 @@ class WallpaperBackground extends StatelessWidget {
           }
           try {
             final bytes = base64Decode(path.substring(idx + header.length));
-            return Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true);
+            return Image.memory(
+              bytes,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+            );
           } catch (_) {
             return null;
           }

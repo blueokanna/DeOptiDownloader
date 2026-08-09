@@ -48,10 +48,11 @@ RUN curl -sSL https://github.com/rustwasm/wasm-pack/releases/download/v0.15.0/wa
 # Install the pinned Flutter SDK from the official release archive (Dart
 # 3.12.2, satisfies the locked `dart: >=3.12.2` requirement). Kept in its own
 # layer so the ~600 MB download is cached across rebuilds.
-RUN curl -sSL -o /tmp/flutter.tar.xz \
+RUN curl -fsSLo /tmp/flutter.tar.xz \
       "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz" \
-    && tar -xJf /tmp/flutter.tar.xz -C /opt \
+    && tar --no-same-owner -xJf /tmp/flutter.tar.xz -C /opt \
     && rm /tmp/flutter.tar.xz \
+    && git config --system --add safe.directory "${FLUTTER_ROOT}" \
     && flutter --version
 
 # 1) Manifests first for layer caching.

@@ -71,7 +71,7 @@ class SenderController extends ChangeNotifier {
   Timer? _timer;
   Timer? _setupTimer;
   final Stopwatch _clock = Stopwatch();
-  final List<Duration> _frameTimes = [];
+  final List<Duration> _frameTimestamps = [];
   DateTime? _lastStatsAt;
 
   /// Sets the target frame rate; takes effect on the next schedule.
@@ -102,7 +102,7 @@ class SenderController extends ChangeNotifier {
       _setupTimer = null;
       _inSetup = false;
       _framesSent = 0;
-      _frameTimes.clear();
+      _frameTimestamps.clear();
       _clock
         ..reset()
         ..start();
@@ -118,7 +118,7 @@ class SenderController extends ChangeNotifier {
     _running = true;
     _paused = false;
     _framesSent = 0;
-    _frameTimes.clear();
+    _frameTimestamps.clear();
     _clock
       ..reset()
       ..start();
@@ -158,7 +158,9 @@ class SenderController extends ChangeNotifier {
     }
     final interval = Duration(microseconds: (1000000 / _fps).round());
     _timer = Timer.periodic(interval, (_) {
-      _pendingTicks++;
+      // Coalesce missed ticks. Fountain frames tolerate loss; queue growth
+      // would increase latency and memory use without improving throughput.
+      _pendingTicks = 1;
       unawaited(_drain());
     });
   }
@@ -179,11 +181,10 @@ class SenderController extends ChangeNotifier {
   }
 
   Future<void> _emitOnce() async {
-    final tick = _clock.elapsed;
     try {
       final frame = senderNextQr(session: session);
       _framesSent++;
-      _frameTimes.add(_clock.elapsed - tick);
+      _frameTimestamps.add(_clock.elapsed);
       matrix.value = frame.qr;
       _maybePublishStats();
     } catch (e) {
@@ -195,9 +196,18 @@ class SenderController extends ChangeNotifier {
   void _maybePublishStats() {
     final elapsed = _clock.elapsed;
     // Keep the frame-time window to the last second for a stable fps reading.
-    _frameTimes.removeWhere((t) => elapsed - t > const Duration(seconds: 1));
+    _frameTimestamps.removeWhere(
+      (timestamp) => elapsed - timestamp > const Duration(seconds: 1),
+    );
+    final window = elapsed < const Duration(seconds: 1)
+        ? elapsed
+        : const Duration(seconds: 1);
     final measuredFps =
-        _frameTimes.length / (elapsed.inMilliseconds / 1000).clamp(0.001, double.infinity);
+        _frameTimestamps.length /
+        (window.inMicroseconds / Duration.microsecondsPerSecond).clamp(
+          0.001,
+          double.infinity,
+        );
     final now = DateTime.now();
     if (_lastStatsAt == null ||
         now.difference(_lastStatsAt!) >= const Duration(milliseconds: 500)) {

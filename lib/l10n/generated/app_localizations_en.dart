@@ -216,7 +216,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aboutBody =>
-      'Rust core (deopti_transfer + rustbinary) does the fountain coding, container packing, session manifest and QR codec; Flutter renders the QR stream and reads the camera. Works on Android, iOS, HarmonyOS Next, Windows, macOS, Linux, Web/WASM and Docker.';
+      'The Rust core handles fountain coding, container integrity, session manifests and QR codecs. Flutter provides sending and camera receiving on supported native and web targets.';
 
   @override
   String get unsupportedPlatform =>
@@ -246,7 +246,49 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get themeHint =>
-      'Material Design 3 color schemes with adaptive shapes.';
+      'Material Design 3 palettes and shape tokens apply across the interface.';
+
+  @override
+  String get colorSpec => 'Color specification';
+
+  @override
+  String get colorSpecIndigo => 'Indigo';
+
+  @override
+  String get colorSpecCyan => 'Cyan';
+
+  @override
+  String get colorSpecEmerald => 'Emerald';
+
+  @override
+  String get colorSpecViolet => 'Violet';
+
+  @override
+  String get colorSpecSunset => 'Sunset';
+
+  @override
+  String get colorSpecNeutral => 'Neutral';
+
+  @override
+  String get colorStyle => 'Color style';
+
+  @override
+  String get colorStyleTonalSpot => 'Tonal spot';
+
+  @override
+  String get colorStyleExpressive => 'Expressive';
+
+  @override
+  String get colorStyleFidelity => 'Fidelity';
+
+  @override
+  String get colorStyleVibrant => 'Vibrant';
+
+  @override
+  String get colorStyleNeutral => 'Neutral';
+
+  @override
+  String get colorStyleMonochrome => 'Monochrome';
 
   @override
   String get themeMode => 'Theme mode';

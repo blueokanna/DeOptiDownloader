@@ -30,11 +30,10 @@ English version: [README.md](README.md)。
   派生密钥；**以及法官可恢复传输（JRC）**：发送方针对指定法官的公钥提交承诺，
   任何摄像头只能看到隐藏承诺与密文，只有持有匹配私钥的法官才能恢复文件。两者
   均为可选，并在所有原生构建中由 `encryption` Cargo 特性启用。
-- **Material 3 设计系统** —— Google 字体（Noto Sans SC，随包内置、全平台离线可
-  用）；精选主题注册表（靛蓝浅色/深色、**AMOLED 深黑**——为 OLED 屏幕提供纯黑
-  表面、紫罗兰 *表现力*、午夜 *保真*、日落 *鲜明*、单色），每个主题均由
-  `ColorScheme.fromSeed` + Material 3 `DynamicSchemeVariant`（色彩风格）与 M3
-  形状/动效令牌构建。
+- **Material 3 设计系统** —— 内置 Noto Sans SC 可变字体；六种独立的
+  `ColorSpec` 种子色、六种由真实 `DynamicSchemeVariant` 驱动的 `ColorStyle`、
+  跟随系统/浅色/深色模式，以及使用纯黑表面的 **AMOLED 深黑**策略。M3 形状与
+  动效令牌统一应用到整个界面。
 - **壁纸与模糊** —— 应用内背景可关闭、可选用随包内置的渐变壁纸，也可从相册
   选择自定义照片，并带有可拖动的**高斯模糊滑杆（0–24 σ）**，在界面后方柔化
   背景。
@@ -43,8 +42,8 @@ English version: [README.md](README.md)。
   `flutter_localizations` 让 Material 组件完全本地化。
 - **预测性返回** —— 已设置 `android:enableOnBackInvokedCallback="true"`，
   Android 13+ 将渲染系统预测性返回手势动画。
-- **全平台可用** —— Android、iOS、HarmonyOS Next、Windows、macOS、Linux、
-  Web/WASM 与 Docker（容器化 Web 部署）。
+- **多平台** —— Android、iOS、Windows、macOS 与 Web 支持发送和接收；Linux
+  当前仅支持发送，接收需使用浏览器版本。
 - **开箱即用的 CI** —— GitHub Actions 在每次推送时运行 Rust 检查/测试、Flutter
   分析/测试、真实的 Web/WASM 构建与 Docker 构建（见 [.github/workflows](.github/workflows)）。
 
@@ -70,7 +69,7 @@ English version: [README.md](README.md)。
 | **新增：** 自动重新锁定        | ✅ Rust 内流冲突自动重置                     |
 | **新增：** 会话清单二维码      | ✅ `rustbinary` 编码的设置码 + 接收预览      |
 | **新增：** 诊断自检            | ✅ `runSelfTest()` + `jrcSelfTest()`         |
-| **新增：** Material 3 + 响应式 | ✅ Google 字体、M3 令牌、自适应布局          |
+| **新增：** Material 3 + 响应式 | ✅ 内置字体、M3 令牌、自适应布局            |
 | **新增：** 主题 + 壁纸         | ✅ AMOLED 深黑等 + 模糊 + 自定义照片         |
 | **新增：** i18n                | ✅ 官方 ARB/gen-l10n（中/英）                |
 
@@ -104,22 +103,12 @@ Rust crate 名为 `rust_lib_scan_downloader`；桥接胶水代码位于
 
 ## 外观：主题、壁纸与 i18n
 
-**主题**（`lib/src/app/theme/app_themes.dart`）。一套精选的 Material 3 主题
-注册表，每个主题均由 `ColorScheme.fromSeed` + `DynamicSchemeVariant`（M3 色彩
-风格）与共享的形状/动效令牌构建：
-
-| 主题          | 种子色      | 色彩风格（variant）   | 说明                          |
-| ------------- | ----------- | --------------------- | ----------------------------- |
-| 靛蓝浅色      | `#3D5AFE`   | `tonalSpot`           | 默认                          |
-| 靛蓝深色      | `#3D5AFE`   | `tonalSpot`           | 默认深色                      |
-| AMOLED 深黑   | `#9FA8FF`   | `tonalSpot`           | 纯黑表面（OLED）              |
-| 紫罗兰        | `#7C4DFF`   | `expressive`          | 浅色                          |
-| 午夜          | `#3949AB`   | `fidelity`            | 深色                          |
-| 日落          | `#FF6E40`   | `vibrant`             | 深色                          |
-| 单色          | `#9E9E9E`   | `monochrome`          | 浅色                          |
-
-设置页（首页 → 齿轮图标）可切换主题、主题模式（跟随系统/浅色/深色）与语言。
-设置通过 `shared_preferences` 持久化（`lib/src/app/settings_controller.dart`）。
+**主题**（`lib/src/app/theme/app_themes.dart`）。`ColorSpec` 可选择靛蓝
+`#3D5AFE`、青色 `#006C7A`、翡翠绿 `#006B57`、紫罗兰 `#7C4DFF`、日落
+`#B33C16` 或中性色 `#60646C`。`ColorStyle` 可独立选择 `tonalSpot`、
+`expressive`、`fidelity`、`vibrant`、`neutral` 或 `monochrome`，并直接映射到
+Flutter 的 `DynamicSchemeVariant`。亮暗模式与 AMOLED 纯黑表面策略也彼此独立；
+全部设置通过 `shared_preferences` 持久化。
 
 **壁纸**（`lib/src/app/theme/wallpaper.dart`）。三种模式：*无背景*（不显示图片，
 也无需模糊调节）、*内置壁纸*（`assets/images/wallpapers/` 中的五张渐变壁纸）、
@@ -155,14 +144,14 @@ Rust crate 名为 `rust_lib_scan_downloader`；桥接胶水代码位于
 
 | 平台           | 发送 | 接收 | 说明                                        |
 | -------------- | :--: | :--: | ------------------------------------------- |
-| Android        |  ✅  |  ✅  | `camera`（CameraX）YUV420 图像流            |
-| iOS            |  ✅  |  ✅  | `camera`（AVFoundation）YUV420 图像流       |
-| HarmonyOS Next |  ✅  |  ✅  | 原生 `HarmonyCameraSource`（YUV420 + BGRA） |
-| Windows        |  ✅  |  ✅  | `camera_windows` 后端                       |
-| macOS          |  ✅  |  ✅  | `camera`（AVFoundation）                    |
-| Linux          |  ✅  | ⚠️²  | 尚无统一摄像头后端                          |
+| Android        |  ✅  |  ✅  | CameraX；YUV420/NV21 亮度平面               |
+| iOS            |  ✅  |  ✅  | AVFoundation；YUV420/BGRA8888               |
+| Windows        |  ✅  |  ✅  | `camera_windows`；BGRA8888                  |
+| macOS          |  ✅  |  ✅  | AVFoundation；YUV420/BGRA8888               |
+| Linux          |  ✅  |  ❌²  | 仓库未包含摄像头后端                         |
 | Web / WASM     |  ✅  |  ✅  | getUserMedia + canvas → Rust WASM 解码      |
 | Docker         |  ✅  |  ✅  | Rust `deopti-server` 提供 Web 构建          |
+| HarmonyOS Next |  —   |  —   | 有适配层源码，但仓库未提供 OHOS runner       |
 
 ² Linux 接收页会给出明确提示，建议使用浏览器版本（Docker 容器或任意浏览器）。
 
@@ -191,6 +180,10 @@ Android 构建固定为 **AGP 8.13 + Gradle 8.14.3**（见 `android/settings.gra
 以避免 Windows 上已知的 Kotlin 增量缓存故障；`rust_builder/cargokit/gradle/plugin.gradle`
 已改用 Gradle 的 `ExecOperations`（Gradle 9 移除了 `Project.exec(Closure)`）。
 应用 ID 为 `com.deopti.downloader`。
+
+发布构建不会回退使用 debug 密钥。要生成已签名 APK/AAB，请创建不会被 Git 跟踪的
+`android/key.properties`，填写 `storeFile`、`storePassword`、`keyAlias` 与
+`keyPassword`；缺少该文件时 Gradle 只生成适合 CI 验证的未签名发布产物。
 
 ## Web / WASM
 
@@ -259,11 +252,10 @@ docker run --rm -p 8080:8080 deopti-downloader
 `Dockerfile` 为多阶段构建：构建 Flutter Web 产物 + Rust WASM，编译纯 std 的
 `deopti-server`，然后由它托管产物——无 nginx、无第三方服务。
 
-Flutter 从官方发布归档安装并固定到项目的工具链版本（**3.44.6 / Dart 3.12.2**，
-与 CI 使用的一致），保证容器构建可复现。不使用预构建的 "flutter" Docker 镜像，
-因为 `ghcr.io/cirruslabs/flutter` 自 2026-05-01 起已停止更新，其 `stable` 标签
-携带的 Dart SDK 过旧（3.12.0），无法解析已锁定的 `pubspec.lock`（要求
-`dart: >=3.12.2`）。
+Flutter 发布归档中的 Git 元数据带有发布环境的 UID。镜像使用
+`tar --no-same-owner` 解压，并只把 `/opt/flutter` 注册为系统级
+`safe.directory`；这会消除 `flutter --version` 的 “dubious ownership” 失败，
+同时把 Git 安全例外严格限制在 Flutter SDK 目录。
 
 ## 加密（可选）
 
@@ -307,7 +299,7 @@ lib/
   src/app/widgets/      # ModeCard 等共享 M3 组件
   src/l10n/             # ARB 源文件 + 生成的 AppLocalizations（gen-l10n）
   src/core/transfer/    # SenderController、ReceiverController、payload
-  src/core/camera/      # CameraFrameSource + 插件 / HarmonyOS / Web 后端
+  src/core/camera/      # 摄像头源 + 共享 YUV/NV21/BGRA 亮度转换
   src/core/qr/          # QrPainter / QrDisplay
   src/core/services/    # FileService（io / web）、judge_keys 辅助
   src/core/util/        # formatBytes、尽力而为的 ScreenKeep

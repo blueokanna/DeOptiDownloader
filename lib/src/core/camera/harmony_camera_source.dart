@@ -1,9 +1,8 @@
 import 'dart:async';
-import 'dart:typed_data';
-
 import 'package:camera/camera.dart';
 import 'package:flutter/widgets.dart';
 
+import 'camera_image_luma.dart';
 import 'camera_frame_source.dart';
 import 'luma_frame.dart';
 
@@ -73,49 +72,13 @@ class HarmonyCameraSource implements CameraFrameSource {
       return;
     }
 
-    final group = image.format.group;
-    final Uint8List gray;
-    final int width;
-    final int height;
-
-    if (group == ImageFormatGroup.yuv420 && image.planes.isNotEmpty) {
-      // Only the Y plane is needed for luma — zero colour conversion.
-      final plane = image.planes.first;
-      final bytesPerRow = plane.bytesPerRow;
-      final planeHeight = plane.height ?? image.height;
-      height = planeHeight > image.height ? image.height : planeHeight;
-      width = image.width;
-      gray = Uint8List(width * height);
-      for (var y = 0; y < height; y++) {
-        final src = bytesPerRow * y;
-        gray.setRange(y * width, y * width + width, plane.bytes, src);
-      }
-    } else if (group == ImageFormatGroup.bgra8888) {
-      // BGRA → luma (integer sRGB weights, matching the Rust decoder).
-      width = image.width;
-      height = image.height;
-      final pixels = image.planes.first.bytes;
-      final bytesPerRow = image.planes.first.bytesPerRow;
-      gray = Uint8List(width * height);
-      for (var y = 0; y < height; y++) {
-        final row = bytesPerRow * y;
-        for (var x = 0; x < width; x++) {
-          final p = row + x * 4;
-          final b = pixels[p];
-          final g = pixels[p + 1];
-          final r = pixels[p + 2];
-          gray[y * width + x] = ((77 * r + 150 * g + 29 * b) >> 8) & 0xff;
-        }
-      }
-    } else {
-      // Unsupported format — treat as a dropped frame (fountain absorbs it).
+    final frame = cameraImageToLuma(image, now);
+    if (frame == null) {
       return;
     }
 
     _lastEmit = now;
-    _frames?.add(
-      LumaFrame(data: gray, width: width, height: height, timestamp: now),
-    );
+    _frames?.add(frame);
   }
 
   @override

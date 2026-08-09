@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -35,6 +34,7 @@ class ReceiverController extends ChangeNotifier {
 
   CameraFrameSource? source;
   StreamSubscription<LumaFrame>? _sub;
+  Timer? _signalTimer;
 
   bool _decoding = false;
   DateTime _lastDecodeAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -56,7 +56,7 @@ class ReceiverController extends ChangeNotifier {
   ManifestInfo? manifest;
   bool get hasManifest => manifest != null;
 
-  String? _pendingContainer;
+  Uint8List? _pendingContainer;
   bool _unpacking = false;
 
   bool get hasSignal => acceptedFrames > 0 || outcome.sessionId != null;
@@ -82,8 +82,28 @@ class ReceiverController extends ChangeNotifier {
   Future<void> start(CameraFrameSource camera) async {
     source = camera;
     _startedAt = DateTime.now();
-    await camera.initialize();
-    _sub = camera.frames.listen(_onFrame);
+    try {
+      await camera.initialize();
+    } catch (_) {
+      await camera.dispose();
+      if (identical(source, camera)) {
+        source = null;
+      }
+      rethrow;
+    }
+    _sub = camera.frames.listen(
+      _onFrame,
+      onError: (Object value, StackTrace stackTrace) {
+        error = value.toString();
+        notifyListeners();
+      },
+    );
+    _signalTimer?.cancel();
+    _signalTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!hasSignal && completed == null) {
+        notifyListeners();
+      }
+    });
     notifyListeners();
   }
 
@@ -158,18 +178,19 @@ class ReceiverController extends ChangeNotifier {
       // Only the designated judge can recover it, so route to the judge flow.
       if (_isJrcEnvelope(container)) {
         jrcRequired = true;
-        _pendingContainer = base64Encode(container);
+        _pendingContainer = container;
         notifyListeners();
         return;
       }
       final file = unpackFileFfi(container: container);
       completed = file;
+      _signalTimer?.cancel();
     } catch (e) {
       final msg = e.toString().toLowerCase();
       if (msg.contains('encrypt')) {
         // Authenticated container: prompt for the password.
         passwordRequired = true;
-        _pendingContainer = base64Encode(container);
+        _pendingContainer = container;
       } else {
         error = e.toString();
       }
@@ -192,12 +213,12 @@ class ReceiverController extends ChangeNotifier {
       return false;
     }
     try {
-      final container = base64Decode(_pendingContainer!);
       final file = unpackFileWithPasswordFfi(
-        container: container,
+        container: _pendingContainer!,
         password: password,
       );
       completed = file;
+      _signalTimer?.cancel();
       passwordRequired = false;
       _pendingContainer = null;
       notifyListeners();
@@ -213,12 +234,12 @@ class ReceiverController extends ChangeNotifier {
       return false;
     }
     try {
-      final envelope = base64Decode(_pendingContainer!);
       final file = unpackFileJrcFfi(
-        envelope: envelope,
+        envelope: _pendingContainer!,
         judgeSecretKey: judgeSecretKey,
       );
       completed = file;
+      _signalTimer?.cancel();
       jrcRequired = false;
       _pendingContainer = null;
       notifyListeners();
@@ -239,6 +260,8 @@ class ReceiverController extends ChangeNotifier {
   Future<void> reset() async {
     await _sub?.cancel();
     _sub = null;
+    _signalTimer?.cancel();
+    _signalTimer = null;
     await source?.dispose();
     source = null;
     outcome = ReceiverOutcome(
@@ -268,6 +291,7 @@ class ReceiverController extends ChangeNotifier {
   @override
   void dispose() {
     _sub?.cancel();
+    _signalTimer?.cancel();
     source?.dispose();
     super.dispose();
   }

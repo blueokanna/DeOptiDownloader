@@ -22,7 +22,7 @@ class WebWallpaperStore implements WallpaperStore {
       case 'builtin':
         final asset = prefs.getString(_kAsset);
         if (asset != null && kBuiltinWallpapers.contains(asset)) {
-          return WallpaperSpec.builtin(asset);
+          return WallpaperSpec.builtin(asset, blur: blur);
         }
         return const WallpaperSpec.none();
       case 'custom':
@@ -49,7 +49,7 @@ class WebWallpaperStore implements WallpaperStore {
         await prefs.setString(_kKind, 'builtin');
         await prefs.setString(_kAsset, spec.assetId!);
         await prefs.remove(_kImage);
-        await prefs.remove(_kBlur);
+        await prefs.setDouble(_kBlur, spec.blur);
       case WallpaperKind.custom:
         await prefs.setString(_kKind, 'custom');
         await prefs.setString(_kImage, spec.imagePath ?? '');

@@ -1,9 +1,8 @@
 import 'dart:async';
-import 'dart:typed_data';
-
 import 'package:camera/camera.dart';
 import 'package:flutter/widgets.dart';
 
+import 'camera_image_luma.dart';
 import 'camera_frame_source.dart';
 import 'luma_frame.dart';
 
@@ -32,7 +31,8 @@ class PluginCameraSource implements CameraFrameSource {
     final cameras = await availableCameras();
     if (cameras.isEmpty) {
       throw CameraSourceException('no camera');
-    }    final camera = cameras.firstWhere(
+    }
+    final camera = cameras.firstWhere(
       (c) => c.lensDirection == CameraLensDirection.back,
       orElse: () => cameras.first,
     );
@@ -49,28 +49,19 @@ class PluginCameraSource implements CameraFrameSource {
   }
 
   void _onImage(CameraImage image) {
-    if (image.format.group != ImageFormatGroup.yuv420) {
-      return;
-    }
     final now = DateTime.now();
-    final interval = Duration(microseconds: (1000000 / maxFramesPerSecond).round());
+    final interval = Duration(
+      microseconds: (1000000 / maxFramesPerSecond).round(),
+    );
     if (now.difference(_lastEmit) < interval) {
       return;
     }
-    final plane = image.planes.first;
-    final bytesPerRow = plane.bytesPerRow;
-    final srcHeight = plane.height ?? image.height;
-    final height = srcHeight > image.height ? image.height : srcHeight;
-    final width = image.width;
-    final gray = Uint8List(width * height);
-    for (var y = 0; y < height; y++) {
-      final src = bytesPerRow * y;
-      gray.setRange(y * width, y * width + width, plane.bytes, src);
+    final frame = cameraImageToLuma(image, now);
+    if (frame == null) {
+      return;
     }
     _lastEmit = now;
-    _frames?.add(
-      LumaFrame(data: gray, width: width, height: height, timestamp: now),
-    );
+    _frames?.add(frame);
   }
 
   @override

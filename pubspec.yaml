@@ -40,19 +40,12 @@ dependencies:
   rust_lib_scan_downloader:
     path: rust_builder
 
-  # Material 3 typography via Google Fonts (Noto Sans SC bundled in assets,
-  # so it works offline on every platform, including Web).
-  google_fonts: ^8.2.1
-
   # Camera capture (mobile + macOS + Windows via camera_windows; web via camera_web).
   camera: ^0.12.0
   camera_windows: ^0.2.6
 
   # File pick / save / share.
-  # share_plus must stay < 13.1.0: file_picker (the only stable line, ^11.x)
-  # pins win32 to ^5.9.0, while share_plus >= 13.1.0 requires win32 ^6.0.1, so
-  # a higher range makes `pub get` fail version solving. 12.0.2 is the newest
-  # compatible release.
+  # share_plus <13.0.0 keeps win32 on ^5.x, compatible with file_picker.
   file_picker: ^11.0.0
   share_plus: ^12.0.0
   path_provider: ^2.1.0
@@ -87,11 +80,7 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # Google Fonts (Noto Sans SC) is bundled as a variable font so typography
-  # works offline on every platform (including Web and China networks that
-  # block fonts.gstatic.com). The same file is also named under the
-  # google_fonts asset convention (Regular/Medium/Bold) — the build tooling
-  # deduplicates identical content, so the app ships a single ~17 MB font.
+  # Bundled variable font: offline on every platform, including Web.
   fonts:
     - family: NotoSansSC
       fonts:
@@ -104,8 +93,8 @@ flutter:
 
   # Assets.
   assets:
-    - assets/fonts/
     - assets/images/
+    - assets/images/wallpapers/
 
   # Official Flutter i18n (ARB → gen-l10n); see l10n.yaml at the project root.
   generate: true
