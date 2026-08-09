@@ -558,7 +558,8 @@ mod tests {
         );
         assert!(resolve_inside(root, Path::new("../secret")).is_none());
         assert!(resolve_inside(root, Path::new("a/../../secret")).is_none());
-        assert!(resolve_inside(root, Path::new("C:/windows")).is_none());
         assert!(resolve_inside(root, Path::new("/etc/passwd")).is_none());
+        #[cfg(windows)]
+        assert!(resolve_inside(root, Path::new("C:/windows")).is_none());
     }
 }

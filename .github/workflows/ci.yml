@@ -67,9 +67,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       # Host tests call RustLib.init(), which dlopens the release library from
-      # rust/target/release/ — build it first.
-      - name: Build native Rust library (release)
-        run: cargo build --release --manifest-path rust/Cargo.toml
+      # rust/target/release/ — build it first. The `encryption` feature is
+      # enabled because native app builds enable it via rust/cargokit.yaml,
+      # and the JRC tests (jrcSelfTest) require it.
+      - name: Build native Rust library (release, encryption)
+        run: cargo build --release --features encryption --manifest-path rust/Cargo.toml
 
       - name: Resolve Dart dependencies
         run: flutter pub get
