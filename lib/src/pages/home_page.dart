@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../rust/api/transfer.dart';
-import '../app/app.dart';
 import '../app/responsive.dart';
-import '../app/theme.dart';
+import '../app/theme/app_themes.dart';
 import '../app/widgets/mode_card.dart';
-import '../l10n/strings.dart';
+import '../../l10n/generated/app_localizations.dart';
 import 'receive_page.dart';
 import 'send_page.dart';
+import 'settings_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final s = stringsOf(context);
+    final s = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         title: Text(s.appName),
@@ -24,6 +24,13 @@ class HomePage extends StatelessWidget {
             icon: const Icon(Icons.bug_report_outlined),
             onPressed: () => _showDiagnostics(context, s),
           ),
+          IconButton(
+            tooltip: s.settings,
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsPage()),
+            ),
+          ),
         ],
       ),
       body: SafeArea(
@@ -32,11 +39,20 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Future<void> _showDiagnostics(BuildContext context, Strings s) async {
+  Future<void> _showDiagnostics(
+    BuildContext context,
+    AppLocalizations s,
+  ) async {
     bool? pass;
     String? error;
+    String? jrcLine;
     try {
       pass = runSelfTest();
+      if (encryptionSupported()) {
+        jrcLine = jrcSelfTest() ? 'JRC: OK' : 'JRC: FAIL';
+      } else {
+        jrcLine = 'JRC: n/a (web build)';
+      }
     } catch (e) {
       error = e.toString();
     }
@@ -56,7 +72,7 @@ class HomePage extends StatelessWidget {
         content: Text(
           error != null
               ? '${s.selfTestFail} $error'
-              : (pass == true ? s.selfTestPass : s.selfTestFail),
+              : '${pass == true ? s.selfTestPass : s.selfTestFail}\n$jrcLine',
         ),
         actions: [
           TextButton(
@@ -72,7 +88,7 @@ class HomePage extends StatelessWidget {
 class _HomeBody extends StatelessWidget {
   const _HomeBody({required this.s});
 
-  final Strings s;
+  final AppLocalizations s;
 
   @override
   Widget build(BuildContext context) {

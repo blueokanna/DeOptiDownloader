@@ -6,7 +6,70 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+
+/// A file packed for judge-recoverable optical transfer (JRC mode).
+///
+/// `envelope` is the serialized JRC transcript (`magic ‖ c ‖ aux`) that flows
+/// through the fountain stream unchanged. Any camera pointed at the screen
+/// sees only the hiding commitment and ciphertext; only the designated judge
+/// (holding the matching secret key) recovers the original DCF3 container
+/// with [`unpack_file_jrc_ffi`].
+class JrcPackedData {
+  /// Serialized JRC envelope fed to the fountain sender.
+  final Uint8List envelope;
+
+  /// Original file size in bytes.
+  final int originalSize;
+
+  /// Envelope size in bytes (what actually goes over the light).
+  final int transmittedSize;
+
+  const JrcPackedData({
+    required this.envelope,
+    required this.originalSize,
+    required this.transmittedSize,
+  });
+
+  @override
+  int get hashCode =>
+      envelope.hashCode ^ originalSize.hashCode ^ transmittedSize.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is JrcPackedData &&
+          runtimeType == other.runtimeType &&
+          envelope == other.envelope &&
+          originalSize == other.originalSize &&
+          transmittedSize == other.transmittedSize;
+}
+
+/// A freshly generated JRC judge keypair (32-byte X25519 keys).
+///
+/// The public key is meant to be shared (the sender commits against it); the
+/// secret key is judge-only and must be kept safe by whoever may recover the
+/// transfer. Both are serialized as raw 32-byte little-endian X25519 scalars.
+class JudgeKeyPairData {
+  /// 32 raw bytes of the judge public key (`ek`).
+  final Uint8List publicKey;
+
+  /// 32 raw bytes of the judge secret key (`dk`).
+  final Uint8List secretKey;
+
+  const JudgeKeyPairData({required this.publicKey, required this.secretKey});
+
+  @override
+  int get hashCode => publicKey.hashCode ^ secretKey.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is JudgeKeyPairData &&
+          runtimeType == other.runtimeType &&
+          publicKey == other.publicKey &&
+          secretKey == other.secretKey;
+}
 
 /// A decoded session manifest: the sender's metadata shown as the first QR
 /// so the receiver can preview the transfer before any data frame arrives.

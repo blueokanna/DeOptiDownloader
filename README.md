@@ -34,12 +34,27 @@ Rust 核心 + Flutter 跨端实现，支持发送/接收文件与文本片段。
 - **QR layer tuned for streaming** — ECC level L, smallest fitting version,
   and a downscale-then-decode pipeline in Rust for fast, stable camera
   decoding.
-- **Optional end-to-end encryption** — XChaCha20-Poly1305 with a
-  password-derived key (opt-in; see below).
+- **Optional end-to-end encryption (deopti_transfer 0.1.2)** — XChaCha20-
+  Poly1305 with a password-derived key, **and** judge-recoverable transfer
+  (JRC): a sender commits against a designated judge's public key, so any
+  camera sees only a hiding commitment + ciphertext while the judge alone
+  recovers the file with the matching secret key. Both are opt-in and gated
+  behind the `encryption` Cargo feature on every native build.
 - **Material 3 design system** — Google Fonts (Noto Sans SC, bundled for
-  offline use on every platform), full M3 color / shape / motion tokens, and
-  adaptive responsive layouts for phones, tablets, desktops, Web and
-  HarmonyOS windows.
+  offline use on every platform), a curated theme registry (Indigo light/dark,
+  **AMOLED Dark** with pure-black OLED surfaces, Violet *expressive*, Midnight
+  *fidelity*, Sunset *vibrant*, Monochrome), each built with
+  `ColorScheme.fromSeed` + a Material 3 `DynamicSchemeVariant` (color style)
+  and the M3 shape/motion tokens.
+- **Wallpaper & blur** — an in-app background can be turned off, set to one of
+  the bundled gradient wallpapers, or set to a custom photo from the gallery,
+  with a draggable gaussian-blur slider (0–24 σ) that frosts the image behind
+  the UI.
+- **i18n (ARB → gen-l10n)** — official Flutter localization: `en` + `zh` ARB
+  sources, runtime language switching (system/English/中文), and fully
+  localized Material widgets via `flutter_localizations`.
+- **Predictive back** — `android:enableOnBackInvokedCallback="true"` is set,
+  so Android 13+ renders the predictive back gesture animation.
 - **Fully cross-platform** — Android, iOS, HarmonyOS Next, Windows, macOS,
   Linux, Web/WASM and Docker (containerized web).
 - **CI-ready** — GitHub Actions runs Rust lint/tests, Flutter analyze/tests, a
@@ -65,10 +80,13 @@ and extended:
 | Keep-screen-on while streaming  | ✅ `wakelock_plus` (send + receive)                |
 | Sender tuning (fps / frame size)| ✅ 10/15/20/24/30/60 fps, 500–2953 B frames       |
 | **New:** password encryption    | ✅ XChaCha20-Poly1305 + Argon2id (opt-in)          |
+| **New:** judge-recoverable JRC  | ✅ deopti_transfer 0.1.2 `pack_file_jrc` (opt-in)  |
 | **New:** automatic re-lock      | ✅ stream-conflict auto reset in Rust              |
 | **New:** session manifest QR    | ✅ `rustbinary`-encoded setup QR + receive preview |
-| **New:** diagnostics self-test  | ✅ `runSelfTest()` in the app (home → bug icon)    |
+| **New:** diagnostics self-test  | ✅ `runSelfTest()` + `jrcSelfTest()` (home → bug)  |
 | **New:** Material 3 + responsive| ✅ Google Fonts, M3 tokens, adaptive layouts       |
+| **New:** themes + wallpaper     | ✅ AMOLED Dark etc. + blur, custom photo           |
+| **New:** i18n                   | ✅ official ARB/gen-l10n (en/zh)                   |
 
 ## Architecture
 
@@ -93,11 +111,70 @@ and extended:
        container, crypto)
 ```
 
-The **cargo** crate is `rust_lib_deopti_downloader`; the bridge glue lives in
+The **cargo** crate is `rust_lib_scan_downloader`; the bridge glue lives in
 `lib/src/rust/` (generated). Everything protocol-related lives in
 `deopti_transfer`; `rustbinary` is genuinely used to encode the compact,
 bounded session-manifest payload (see `rust/src/api/manifest.rs`); the app
 layer only adapts them to the bridge.
+
+## Appearance: themes, wallpaper & i18n
+
+**Themes** (`lib/src/app/theme/app_themes.dart`). A curated registry of
+Material 3 themes, each built with `ColorScheme.fromSeed` + a
+`DynamicSchemeVariant` (the M3 "color style") and the shared shape/motion
+tokens:
+
+| Theme          | Seed        | Color style (variant)      | Notes                          |
+| -------------- | ----------- | -------------------------- | ------------------------------ |
+| Indigo Light   | `#3D5AFE`   | `tonalSpot`                | default                        |
+| Indigo Dark    | `#3D5AFE`   | `tonalSpot`                | default dark                   |
+| AMOLED Dark    | `#9FA8FF`   | `tonalSpot`                | pure-black surfaces (OLED)     |
+| Violet         | `#7C4DFF`   | `expressive`               | light                          |
+| Midnight       | `#3949AB`   | `fidelity`                 | dark                           |
+| Sunset         | `#FF6E40`   | `vibrant`                  | dark                           |
+| Monochrome     | `#9E9E9E`   | `monochrome`               | light                          |
+
+The settings page (home → gear icon) picks the theme, the theme mode
+(system/light/dark) and the language. A `PopScope`-friendly settings model is
+persisted with `shared_preferences` (`lib/src/app/settings_controller.dart`).
+
+**Wallpaper** (`lib/src/app/theme/wallpaper.dart`). Three kinds: *none* (no
+image, no blur control), *bundled* (five gradient wallpapers in
+`assets/images/wallpapers/`), and *custom* (a photo from the gallery, stored
+in the app support dir on native / as a data URI on web). An active wallpaper
+gets a **draggable gaussian-blur slider (0–24 σ)** rendered with
+`ImageFilter.blur` behind the whole app; surfaces turn translucent
+automatically so the image glows through while on-* colors stay readable.
+
+**i18n** (`lib/l10n/*.arb`, generated by `flutter gen-l10n`). Official ARB →
+`AppLocalizations` pipeline with `flutter_localizations`; `en` + `zh` sources
+and a system/English/中文 runtime switch.
+
+## Judge-recoverable transfer (JRC)
+
+`deopti_transfer` 0.1.2 adds the JRC primitive: a sender commits a file
+against a **designated judge's public key**; any camera that intercepts the
+QR stream sees only a hiding commitment and ciphertext; only the judge,
+holding the matching **secret key**, recovers the original file.
+
+- **Sender**: enable *Judge-recoverable (JRC)* on the Send page and paste the
+  judge's public key (64 hex chars), or generate a fresh judge keypair with
+  the dice button. The packed `envelope` streams through the fountain
+  unchanged.
+- **Judge / receiver**: on the Receive page, when a JRC envelope arrives the
+  app asks for the judge secret key — either type it or use the key saved in
+  Settings. `unpack_file_jrc_ffi` verifies the binding + DCF3 digest before
+  offering the file, so a wrong key is rejected.
+- The end-to-end round trip is covered by `jrcSelfTest()` (Rust) and the
+  Flutter test suite; the `encryption` Cargo feature is enabled for every
+  native build via `rust/cargokit.yaml` (the Web build keeps it off because
+  `getrandom` has no source on `wasm32-unknown-unknown`).
+
+## Predictive back
+
+`android:enableOnBackInvokedCallback="true"` is declared in
+`AndroidManifest.xml`, so on Android 13+ the system predictive-back gesture
+animation plays for the Flutter navigator (the app targets SDK 34+).
 
 ## Platform support
 
@@ -241,15 +318,16 @@ rust/
   server/               # deopti-server: std-only static server (no nginx)
 lib/
   main.dart             # bootstrap (Rust init is non-blocking, errors surfaced)
-  src/app/              # MaterialApp, M3 theme (Google Fonts), responsive utils
+  src/app/              # MaterialApp + settings controller + wallpaper scope
+  src/app/theme/        # app_themes (M3 registry), wallpaper + persistence
   src/app/widgets/      # ModeCard and shared M3 widgets
-  src/l10n/strings.dart # zh / en UI strings
+  src/l10n/             # ARB sources + generated AppLocalizations (gen-l10n)
   src/core/transfer/    # SenderController, ReceiverController, payload
   src/core/camera/      # CameraFrameSource + plugin / HarmonyOS / web backends
   src/core/qr/          # QrPainter / QrDisplay
-  src/core/services/    # FileService (io / web)
+  src/core/services/    # FileService (io / web), judge_keys helper
   src/core/util/        # formatBytes, best-effort ScreenKeep
-  src/pages/            # Home, Send, Receive (responsive, animated)
+  src/pages/            # Home, Send, Receive, Settings (responsive, animated)
   src/rust/             # generated FRB glue (do not edit)
 .github/workflows/      # ci.yml + deploy-pages.yml
 Dockerfile · scripts/build-web.ps1

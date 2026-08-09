@@ -1,0 +1,12 @@
+# Flutter gen-l10n configuration.
+#
+# ARB source files live in lib/l10n/; generated Dart lands in
+# lib/l10n/generated/ (gitignored by the standard Flutter .gitignore via
+# .dart_tool, but we keep the folder committed for offline CI builds).
+arb-dir: lib/l10n
+template-arb-file: app_en.arb
+output-localization-file: app_localizations.dart
+output-class: AppLocalizations
+output-dir: lib/l10n/generated
+nullable-getter: false
+untranslated-messages-file: l10n_untranslated.json

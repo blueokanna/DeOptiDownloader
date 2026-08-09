@@ -10,10 +10,11 @@ import '../app/app.dart';
 import '../app/responsive.dart';
 import '../core/camera/camera_source_factory.dart';
 import '../core/services/file_service.dart';
+import '../core/services/judge_keys.dart';
 import '../core/transfer/receiver_controller.dart';
 import '../core/util/format.dart';
 import '../core/util/screen_keep.dart';
-import '../l10n/strings.dart';
+import '../../l10n/generated/app_localizations.dart';
 
 class ReceivePage extends StatefulWidget {
   const ReceivePage({super.key});
@@ -65,7 +66,7 @@ class _ReceivePageState extends State<ReceivePage> {
   }
 
   String _describeCameraError(String raw) {
-    final s = stringsOf(context);
+    final s = AppLocalizations.of(context);
     final lower = raw.toLowerCase();
     if (lower.contains('permission') || lower.contains('denied')) {
       return s.cameraPermissionDenied;
@@ -82,7 +83,7 @@ class _ReceivePageState extends State<ReceivePage> {
 
   @override
   Widget build(BuildContext context) {
-    final s = stringsOf(context);
+    final s = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(s.receiveTitle)),
       body: _initializing
@@ -93,7 +94,7 @@ class _ReceivePageState extends State<ReceivePage> {
     );
   }
 
-  Widget _buildError(Strings s) {
+  Widget _buildError(AppLocalizations s) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -122,7 +123,7 @@ class _ReceivePageState extends State<ReceivePage> {
     );
   }
 
-  Widget _buildLive(Strings s) {
+  Widget _buildLive(AppLocalizations s) {
     final controller = _controller!;
     return AnimatedBuilder(
       animation: controller,
@@ -131,6 +132,12 @@ class _ReceivePageState extends State<ReceivePage> {
         if (controller.passwordRequired) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _showPasswordDialog(s);
+          });
+        }
+        // Judge-recoverable gate.
+        if (controller.jrcRequired) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showJudgeKeyDialog(s);
           });
         }
         // Completion view.
@@ -149,7 +156,7 @@ class _ReceivePageState extends State<ReceivePage> {
     );
   }
 
-  Widget _buildOverlay(Strings s, ReceiverController c) {
+  Widget _buildOverlay(AppLocalizations s, ReceiverController c) {
     return IgnorePointer(
       child: Container(
         decoration: const BoxDecoration(
@@ -175,7 +182,7 @@ class _ReceivePageState extends State<ReceivePage> {
     );
   }
 
-  Widget _buildNoSignalCard(Strings s) {
+  Widget _buildNoSignalCard(AppLocalizations s) {
     return Card(
       color: Colors.black.withValues(alpha: 0.75),
       child: Padding(
@@ -195,7 +202,7 @@ class _ReceivePageState extends State<ReceivePage> {
     );
   }
 
-  Widget _buildProgress(Strings s, ReceiverController c) {
+  Widget _buildProgress(AppLocalizations s, ReceiverController c) {
     final k = c.outcome.k;
     final total = k == null ? null : (k * 1.15).ceil();
     final lockLine = k == null
@@ -262,7 +269,7 @@ class _ReceivePageState extends State<ReceivePage> {
 
   // --- Completion ----------------------------------------------------------
 
-  Widget _buildCompleted(Strings s, OpticalFileData file) {
+  Widget _buildCompleted(AppLocalizations s, OpticalFileData file) {
     final isText = file.mimeType.startsWith('text/') ||
         file.mimeType == 'application/json' ||
         file.mimeType == 'application/xml';
@@ -384,7 +391,7 @@ class _ReceivePageState extends State<ReceivePage> {
     await Clipboard.setData(ClipboardData(text: text));
     if (mounted) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(stringsOf(context).copied)));
+          .showSnackBar(SnackBar(content: Text(AppLocalizations.of(context).copied)));
     }
   }
 
@@ -420,7 +427,7 @@ class _ReceivePageState extends State<ReceivePage> {
     }
   }
 
-  Future<void> _showPasswordDialog(Strings s) async {
+  Future<void> _showPasswordDialog(AppLocalizations s) async {
     if (_passwordDialogOpen) {
       return;
     }
@@ -471,5 +478,99 @@ class _ReceivePageState extends State<ReceivePage> {
     }
   }
 
+  /// Judge-recoverable gate: prompts for the judge secret key (hex), with a
+  /// one-tap "use saved key" shortcut backed by the settings page.
+  Future<void> _showJudgeKeyDialog(AppLocalizations s) async {
+    if (_jrcDialogOpen) {
+      return;
+    }
+    _jrcDialogOpen = true;
+    final controller = _controller;
+    if (controller == null) {
+      _jrcDialogOpen = false;
+      return;
+    }
+    final input = TextEditingController();
+    final saved = appSettingsOf(context).judgeSecretKey;
+
+    String? submitted;
+    if (saved != null) {
+      // Offer the saved judge key as a quick action.
+      submitted = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: Text(s.enterJudgeKey),
+          content: Text(s.enterJudgeKeyBody),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(s.cancel),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context).pop(saved),
+              icon: const Icon(Icons.key_outlined),
+              label: Text(s.judgeSecretKey),
+            ),
+          ],
+        ),
+      );
+      if (!mounted) {
+        return;
+      }
+    }
+    submitted ??= await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: Text(s.enterJudgeKey),
+          content: TextField(
+            controller: input,
+            obscureText: true,
+            autofocus: true,
+            maxLength: 64,
+            decoration: InputDecoration(
+              labelText: s.judgeSecretKey,
+              hintText: s.judgeSecretKeyHint,
+              prefixIcon: const Icon(Icons.key_outlined),
+              border: const OutlineInputBorder(),
+            ),
+            onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(s.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(input.text.trim()),
+              child: Text(s.confirm),
+            ),
+          ],
+        ),
+      );
+    if (!mounted) {
+      return;
+    }
+    _jrcDialogOpen = false;
+    if (submitted == null || submitted.isEmpty) {
+      return;
+    }
+    final key = hexToBytes(submitted);
+    if (key == null || key.length != 32) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(s.judgeSecretKeyInvalid)));
+      }
+      return;
+    }
+    final ok = await controller.submitJudgeKey(key);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(s.wrongJudgeKey)));
+    }
+  }
+
   bool _passwordDialogOpen = false;
+  bool _jrcDialogOpen = false;
 }

@@ -30,6 +30,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
 
   # Referenced by transitive packages' IconData (kept so CupertinoIcons glyphs
   # resolve; tree-shaking keeps the shipped font tiny).
@@ -59,6 +61,9 @@ dependencies:
   # MIME detection + web interop (getUserMedia, canvas capture, download).
   mime: ^2.0.0
   web: ^1.1.1
+
+  # Persistent user settings (theme, wallpaper, language, judge key).
+  shared_preferences: ^2.5.0
 
 dev_dependencies:
   flutter_test:
@@ -97,3 +102,7 @@ flutter:
   # Assets.
   assets:
     - assets/fonts/
+    - assets/images/
+
+  # Official Flutter i18n (ARB → gen-l10n); see l10n.yaml at the project root.
+  generate: true

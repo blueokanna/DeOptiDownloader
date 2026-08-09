@@ -18,8 +18,8 @@ use crate::api::manifest::{
 };
 use crate::api::qr::{qr_encode, qr_version_for, MAX_QR_FRAME_BYTES};
 use crate::api::types::{
-    ManifestInfo, OpticalFileData, PackedFileData, PushStatus, QrMatrix, ReceiverOutcome,
-    SenderFrame, SenderFrameQr, SenderInfo,
+    JrcPackedData, JudgeKeyPairData, ManifestInfo, OpticalFileData, PackedFileData, PushStatus,
+    QrMatrix, ReceiverOutcome, SenderFrame, SenderFrameQr, SenderInfo,
 };
 
 /// Canonical on-the-wire frame sizes (header + block), matching the reference
@@ -160,6 +160,134 @@ pub fn unpack_file_with_password_ffi(
 }
 
 // ---------------------------------------------------------------------------
+// Judge-Recoverable Commitment (JRC) — deopti_transfer 0.1.2
+// ---------------------------------------------------------------------------
+
+/// Generate a fresh JRC judge keypair from the OS RNG (encryption builds).
+///
+/// The public key is shared with senders; the secret key stays with the
+/// judge. On non-encryption builds (Web) this returns an error, mirroring
+/// [`pack_file_encrypted_ffi`].
+pub fn jrc_keygen_ffi() -> Result<JudgeKeyPairData, String> {
+    #[cfg(feature = "encryption")]
+    {
+        use deopti_transfer::jrc::keygen;
+        let pair = keygen().map_err(ot_error)?;
+        Ok(JudgeKeyPairData {
+            public_key: pair.ek.to_bytes().to_vec(),
+            secret_key: pair.dk.to_bytes().to_vec(),
+        })
+    }
+    #[cfg(not(feature = "encryption"))]
+    {
+        Err("encryption is not enabled in this build".to_owned())
+    }
+}
+
+/// Pack a file for judge-recoverable optical transfer (encryption builds).
+///
+/// `judge_public_key` is the 32 raw bytes of the judge's X25519 public key.
+/// The returned `envelope` is fed to the fountain sender exactly like a
+/// normal DCF3 container. Co-receiving cameras see only the hiding
+/// commitment and ciphertext; the judge recovers the file with
+/// [`unpack_file_jrc_ffi`].
+pub fn pack_file_jrc_ffi(
+    name: String,
+    mime_type: String,
+    bytes: Vec<u8>,
+    judge_public_key: Vec<u8>,
+) -> Result<JrcPackedData, String> {
+    #[cfg(feature = "encryption")]
+    {
+        use deopti_transfer::container::pack_file_jrc;
+        use deopti_transfer::crypto::random_nonce;
+        use deopti_transfer::jrc::JudgePublicKey;
+        let ek: [u8; 32] = judge_public_key
+            .as_slice()
+            .try_into()
+            .map_err(|_| "judge public key must be exactly 32 bytes".to_owned())?;
+        let judge_pk = JudgePublicKey::from_bytes(ek);
+        let nonce = random_nonce().map_err(|e| format!("nonce: {e}"))?;
+        let packed =
+            pack_file_jrc(&name, &mime_type, &bytes, &judge_pk, &nonce).map_err(ot_error)?;
+        Ok(JrcPackedData {
+            envelope: packed.envelope,
+            original_size: packed.original_size as u32,
+            transmitted_size: packed.transmitted_size as u32,
+        })
+    }
+    #[cfg(not(feature = "encryption"))]
+    {
+        let _ = (name, mime_type, bytes, judge_public_key);
+        Err("encryption is not enabled in this build".to_owned())
+    }
+}
+
+/// Recover a file from a JRC envelope with the judge's secret key.
+///
+/// `judge_secret_key` is the 32 raw bytes of the judge's X25519 secret key.
+/// The JRC binding check and the DCF3 digest both verify the recovered
+/// container before any metadata is trusted.
+pub fn unpack_file_jrc_ffi(
+    envelope: Vec<u8>,
+    judge_secret_key: Vec<u8>,
+) -> Result<OpticalFileData, String> {
+    #[cfg(feature = "encryption")]
+    {
+        use deopti_transfer::container::unpack_file_jrc;
+        use deopti_transfer::jrc::JudgeSecretKey;
+        let dk: [u8; 32] = judge_secret_key
+            .as_slice()
+            .try_into()
+            .map_err(|_| "judge secret key must be exactly 32 bytes".to_owned())?;
+        let judge = JudgeSecretKey::from_bytes(dk);
+        let file = unpack_file_jrc(&envelope, &judge).map_err(ot_error)?;
+        Ok(to_file_data(file))
+    }
+    #[cfg(not(feature = "encryption"))]
+    {
+        let _ = (envelope, judge_secret_key);
+        Err("encryption is not enabled in this build".to_owned())
+    }
+}
+
+/// Run a full JRC round trip in-process: keygen → pack → judge recover.
+/// Returns `true` on success; used by the app's diagnostics and by tests.
+pub fn jrc_self_test() -> Result<bool, String> {
+    #[cfg(feature = "encryption")]
+    {
+        use deopti_transfer::container::unpack_file_jrc;
+        use deopti_transfer::crypto::random_nonce;
+        use deopti_transfer::jrc::{keygen, JudgePublicKey};
+
+        let pair = keygen().map_err(ot_error)?;
+        let nonce = random_nonce().map_err(|e| format!("nonce: {e}"))?;
+        let name = "jrc-self-test.txt".to_owned();
+        let mime = "text/plain".to_owned();
+        let payload: Vec<u8> = (0..2048u32).map(|i| (i % 97) as u8).collect();
+
+        let packed =
+            deopti_transfer::container::pack_file_jrc(&name, &mime, &payload, &pair.ek, &nonce)
+                .map_err(ot_error)?;
+        let file = unpack_file_jrc(&packed.envelope, &pair.dk).map_err(ot_error)?;
+        if file.name != name || file.bytes != payload {
+            return Err("JRC round trip mismatch".to_owned());
+        }
+        // A wrong judge key must fail recovery.
+        let other = keygen().map_err(ot_error)?;
+        let _ = JudgePublicKey::from_bytes(other.ek.to_bytes());
+        if unpack_file_jrc(&packed.envelope, &other.dk).is_ok() {
+            return Err("JRC accepted a wrong judge key".to_owned());
+        }
+        Ok(true)
+    }
+    #[cfg(not(feature = "encryption"))]
+    {
+        Err("encryption is not enabled in this build".to_owned())
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Sending session
 // ---------------------------------------------------------------------------
 
@@ -236,6 +364,12 @@ pub fn sender_create(
 /// for every frame size. Fails softly: a malformed container yields empty
 /// metadata (the manifest is a convenience, never a correctness requirement).
 fn container_metadata(container: &[u8]) -> (bool, String, String) {
+    // A JRC envelope ("JRC\x01" magic) is opaque to the manifest layer: the
+    // metadata stays empty but the transfer is flagged as encrypted so the
+    // receiving UI shows the right banner before the envelope is recovered.
+    if container.len() >= 4 && container[..4] == *b"JRC\x01" {
+        return (true, String::new(), String::new());
+    }
     use deopti_transfer::container::FILE_HEADER_LEN;
     if container.len() < FILE_HEADER_LEN {
         return (false, String::new(), String::new());
@@ -603,4 +737,57 @@ fn random_u16() -> u16 {
     x = (x ^ (x >> 30)).wrapping_mul(0x94D0_49BB_1331_11EB);
     x = (x ^ (x >> 27)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
     (x ^ (x >> 31)) as u16
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pack_unpack_roundtrip() {
+        let packed = pack_file(
+            "hello.txt",
+            "text/plain",
+            b"hello over light, from the rust test suite",
+        )
+        .expect("pack");
+        let file = unpack_file(&packed.container).expect("unpack");
+        assert_eq!(file.name, "hello.txt");
+        assert_eq!(file.bytes, b"hello over light, from the rust test suite");
+    }
+
+    #[test]
+    fn full_fountain_roundtrip() {
+        assert!(run_self_test().expect("self test"));
+    }
+
+    #[cfg(feature = "encryption")]
+    #[test]
+    fn jrc_keygen_pack_recover() {
+        assert!(jrc_self_test().expect("jrc self test"));
+
+        let pair = jrc_keygen_ffi().expect("keygen");
+        assert_eq!(pair.public_key.len(), 32);
+        assert_eq!(pair.secret_key.len(), 32);
+
+        let packed = pack_file_jrc_ffi(
+            "jrc.bin".to_owned(),
+            "application/octet-stream".to_owned(),
+            (0..4096u32).map(|i| (i % 251) as u8).collect(),
+            pair.public_key.clone(),
+        )
+        .expect("pack jrc");
+        assert!(!packed.envelope.is_empty());
+        assert!(packed.transmitted_size > 0);
+
+        let file = unpack_file_jrc_ffi(packed.envelope, pair.secret_key).expect("recover");
+        assert_eq!(file.name, "jrc.bin");
+        assert_eq!(file.bytes.len(), 4096);
+    }
+
+    #[cfg(not(feature = "encryption"))]
+    #[test]
+    fn jrc_disabled_without_encryption() {
+        assert!(jrc_keygen_ffi().is_err());
+    }
 }

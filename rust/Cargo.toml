@@ -1,5 +1,5 @@
 [package]
-name = "rust_lib_deopti_downloader"
+name = "rust_lib_scan_downloader"
 version = "0.1.0"
 edition = "2021"
 
@@ -15,7 +15,7 @@ default = []
 encryption = ["deopti_transfer/encryption", "dep:getrandom"]
 
 [dependencies]
-deopti_transfer = { version = "0.1.1", features = ["std"] }
+deopti_transfer = { version = "0.1.2", features = ["std"] }
 flutter_rust_bridge = "=2.12.0"
 getrandom = { version = "0.4", default-features = false, optional = true }
 qrcode = { version = "0.14.1" }

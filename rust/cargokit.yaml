@@ -1,0 +1,20 @@
+# Cargokit (rust_builder) build options for native platforms.
+#
+# The `encryption` feature (XChaCha20-Poly1305 + JRC judge-recoverable) is
+# enabled for every native build — Android, iOS, Windows, macOS, Linux. The
+# Web/WASM build is driven by `flutter_rust_bridge build-web` (wasm-pack),
+# which does NOT read this file and stays on default features, because
+# `getrandom` has no OS source on `wasm32-unknown-unknown`.
+cargo:
+  debug:
+    extra_flags:
+      - --features
+      - encryption
+  release:
+    extra_flags:
+      - --features
+      - encryption
+  profile:
+    extra_flags:
+      - --features
+      - encryption

@@ -6,16 +6,16 @@ import 'package:flutter/services.dart';
 
 import '../rust/api/transfer.dart';
 import '../rust/api/types.dart';
-import '../app/app.dart';
 import '../app/responsive.dart';
-import '../app/theme.dart';
+import '../app/theme/app_themes.dart';
 import '../core/qr/qr_display.dart';
 import '../core/services/file_service.dart';
+import '../core/services/judge_keys.dart';
 import '../core/transfer/payload.dart';
 import '../core/transfer/sender_controller.dart';
 import '../core/util/format.dart';
 import '../core/util/screen_keep.dart';
-import '../l10n/strings.dart';
+import '../../l10n/generated/app_localizations.dart';
 
 class SendPage extends StatefulWidget {
   const SendPage({super.key});
@@ -35,8 +35,10 @@ class _SendPageState extends State<SendPage> {
 
   // Settings.
   bool _encrypt = false;
+  bool _jrc = false;
   bool _encryptionSupported = false;
   final TextEditingController _password = TextEditingController();
+  final TextEditingController _judgePublicKey = TextEditingController();
   int _fps = 24;
   int _frameBytes = 2953;
   List<int> _frameOptions = const [];
@@ -75,6 +77,7 @@ class _SendPageState extends State<SendPage> {
     _controller?.dispose();
     _snippet.dispose();
     _password.dispose();
+    _judgePublicKey.dispose();
     super.dispose();
   }
 
@@ -94,7 +97,7 @@ class _SendPageState extends State<SendPage> {
     final maxBytes = maxFileBytes();
     if (picked.length > maxBytes) {
       setState(() {
-        _error = stringsOf(context).fileTooLarge;
+        _error = AppLocalizations.of(context).fileTooLarge;
       });
       return;
     }
@@ -107,7 +110,7 @@ class _SendPageState extends State<SendPage> {
   Future<void> _applySnippet() async {
     final text = _snippet.text.trim();
     if (text.isEmpty) {
-      setState(() => _error = stringsOf(context).snippetEmpty);
+      setState(() => _error = AppLocalizations.of(context).snippetEmpty);
       return;
     }
     final bytes = Uint8List.fromList(utf8.encode(text));
@@ -137,20 +140,41 @@ class _SendPageState extends State<SendPage> {
       _error = null;
     });
     try {
-      final packed = _encrypt && _encryptionSupported
-          ? packFileEncryptedFfi(
-              name: payload.name,
-              mimeType: payload.mimeType,
-              bytes: payload.bytes,
-              password: _password.text,
-            )
-          : packFileFfi(
-              name: payload.name,
-              mimeType: payload.mimeType,
-              bytes: payload.bytes,
-            );
+      final Uint8List container;
+      if (_jrc && _encryptionSupported) {
+        // Judge-recoverable: pack against the judge's public key. The
+        // resulting envelope flows through the fountain exactly like a
+        // normal container; only the judge recovers the file.
+        final judgeHex = _judgePublicKey.text.trim();
+        final judgeBytes = hexToBytes(judgeHex);
+        if (judgeBytes == null || judgeBytes.length != 32) {
+          throw Exception(AppLocalizations.of(context).judgePublicKeyInvalid);
+        }
+        final jrc = packFileJrcFfi(
+          name: payload.name,
+          mimeType: payload.mimeType,
+          bytes: payload.bytes,
+          judgePublicKey: judgeBytes,
+        );
+        container = jrc.envelope;
+      } else if (_encrypt && _encryptionSupported) {
+        final packed = packFileEncryptedFfi(
+          name: payload.name,
+          mimeType: payload.mimeType,
+          bytes: payload.bytes,
+          password: _password.text,
+        );
+        container = packed.container;
+      } else {
+        final packed = packFileFfi(
+          name: payload.name,
+          mimeType: payload.mimeType,
+          bytes: payload.bytes,
+        );
+        container = packed.container;
+      }
       final session = senderCreate(
-        container: packed.container,
+        container: container,
         frameBytes: _frameBytes,
         sessionId: null,
       );
@@ -197,7 +221,7 @@ class _SendPageState extends State<SendPage> {
 
   @override
   Widget build(BuildContext context) {
-    final s = stringsOf(context);
+    final s = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(s.sendTitle)),
       body: AnimatedSwitcher(
@@ -211,7 +235,7 @@ class _SendPageState extends State<SendPage> {
 
   // --- Setup view ----------------------------------------------------------
 
-  Widget _buildSetup(Strings s) {
+  Widget _buildSetup(AppLocalizations s) {
     return ResponsiveBox(
       child: ListView(
         padding: Responsive.paddingOf(context),
@@ -244,7 +268,7 @@ class _SendPageState extends State<SendPage> {
     );
   }
 
-  Widget _buildPayloadSection(Strings s) {
+  Widget _buildPayloadSection(AppLocalizations s) {
     final payload = _payload;
     return Card(
       child: Padding(
@@ -304,7 +328,7 @@ class _SendPageState extends State<SendPage> {
     );
   }
 
-  Future<void> _showSnippetDialog(Strings s) async {
+  Future<void> _showSnippetDialog(AppLocalizations s) async {
     _snippet.text = _snippetMode ? _snippet.text : '';
     await showDialog<void>(
       context: context,
@@ -333,7 +357,7 @@ class _SendPageState extends State<SendPage> {
     );
   }
 
-  Widget _buildSettingsSection(Strings s) {
+  Widget _buildSettingsSection(AppLocalizations s) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -375,8 +399,13 @@ class _SendPageState extends State<SendPage> {
                 contentPadding: EdgeInsets.zero,
                 title: Text(s.encryption),
                 subtitle: Text(s.encryptionHint),
-                value: _encrypt,
-                onChanged: (v) => setState(() => _encrypt = v),
+                value: _encrypt && !_jrc,
+                onChanged: (v) => setState(() {
+                  _encrypt = v;
+                  if (v) {
+                    _jrc = false;
+                  }
+                }),
               ),
             if (_encrypt && _encryptionSupported)
               Padding(
@@ -392,6 +421,33 @@ class _SendPageState extends State<SendPage> {
                   ),
                 ),
               ),
+            if (_encryptionSupported)
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(s.jrc),
+                subtitle: Text(s.jrcHint),
+                value: _jrc,
+                onChanged: (v) => setState(() {
+                  _jrc = v;
+                  if (v) {
+                    _encrypt = false;
+                  }
+                }),
+              ),
+            if (_jrc && _encryptionSupported)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: TextField(
+                  controller: _judgePublicKey,
+                  maxLength: 64,
+                  decoration: InputDecoration(
+                    labelText: s.judgePublicKey,
+                    hintText: s.judgePublicKeyHint,
+                    prefixIcon: const Icon(Icons.key_outlined),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -400,7 +456,7 @@ class _SendPageState extends State<SendPage> {
 
   // --- Streaming view ------------------------------------------------------
 
-  Widget _buildStreaming(Strings s) {
+  Widget _buildStreaming(AppLocalizations s) {
     final controller = _controller!;
     final info = _info!;
     return Column(
@@ -486,7 +542,7 @@ class _SendPageState extends State<SendPage> {
     );
   }
 
-  Future<void> _shareSession(Strings s) async {
+  Future<void> _shareSession(AppLocalizations s) async {
     final info = _info;
     if (info == null) {
       return;
@@ -521,7 +577,7 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = stringsOf(context);
+    final s = AppLocalizations.of(context);
     String fmtFps(double v) => v.toStringAsFixed(1);
     final rows = <Widget>[
       _cell(s.framesPerSecond, '${fmtFps(fps)} fps', context),

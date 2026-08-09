@@ -48,6 +48,7 @@ class ReceiverController extends ChangeNotifier {
   /// Completed transfer (unencrypted or after password).
   OpticalFileData? completed;
   bool passwordRequired = false;
+  bool jrcRequired = false;
   String? error;
 
   /// Latest decoded session manifest (shown as the sender's setup QR). Lets
@@ -153,6 +154,14 @@ class ReceiverController extends ChangeNotifier {
     }
     _unpacking = true;
     try {
+      // A JRC envelope begins with the "JRC\x01" magic, not the DCF3 magic.
+      // Only the designated judge can recover it, so route to the judge flow.
+      if (_isJrcEnvelope(container)) {
+        jrcRequired = true;
+        _pendingContainer = base64Encode(container);
+        notifyListeners();
+        return;
+      }
       final file = unpackFileFfi(container: container);
       completed = file;
     } catch (e) {
@@ -169,6 +178,14 @@ class ReceiverController extends ChangeNotifier {
     }
   }
 
+  /// Whether [bytes] look like a serialized JRC envelope (`"JRC\x01"`).
+  static bool _isJrcEnvelope(Uint8List bytes) =>
+      bytes.length >= 4 &&
+      bytes[0] == 0x4A &&
+      bytes[1] == 0x52 &&
+      bytes[2] == 0x43 &&
+      bytes[3] == 0x01;
+
   /// Submits the password for an encrypted transfer; returns success.
   Future<bool> submitPassword(String password) async {
     if (_pendingContainer == null) {
@@ -182,6 +199,27 @@ class ReceiverController extends ChangeNotifier {
       );
       completed = file;
       passwordRequired = false;
+      _pendingContainer = null;
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Submits the judge secret key (hex) for a JRC transfer; returns success.
+  Future<bool> submitJudgeKey(List<int> judgeSecretKey) async {
+    if (_pendingContainer == null) {
+      return false;
+    }
+    try {
+      final envelope = base64Decode(_pendingContainer!);
+      final file = unpackFileJrcFfi(
+        envelope: envelope,
+        judgeSecretKey: judgeSecretKey,
+      );
+      completed = file;
+      jrcRequired = false;
       _pendingContainer = null;
       notifyListeners();
       return true;
@@ -218,6 +256,7 @@ class ReceiverController extends ChangeNotifier {
     acceptedFrames = 0;
     completed = null;
     passwordRequired = false;
+    jrcRequired = false;
     error = null;
     manifest = null;
     _pendingContainer = null;

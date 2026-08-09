@@ -90,6 +90,50 @@ OpticalFileData unpackFileWithPasswordFfi({
   password: password,
 );
 
+/// Generate a fresh JRC judge keypair from the OS RNG (encryption builds).
+///
+/// The public key is shared with senders; the secret key stays with the
+/// judge. On non-encryption builds (Web) this returns an error, mirroring
+/// [`pack_file_encrypted_ffi`].
+JudgeKeyPairData jrcKeygenFfi() =>
+    RustLib.instance.api.crateApiTransferJrcKeygenFfi();
+
+/// Pack a file for judge-recoverable optical transfer (encryption builds).
+///
+/// `judge_public_key` is the 32 raw bytes of the judge's X25519 public key.
+/// The returned `envelope` is fed to the fountain sender exactly like a
+/// normal DCF3 container. Co-receiving cameras see only the hiding
+/// commitment and ciphertext; the judge recovers the file with
+/// [`unpack_file_jrc_ffi`].
+JrcPackedData packFileJrcFfi({
+  required String name,
+  required String mimeType,
+  required List<int> bytes,
+  required List<int> judgePublicKey,
+}) => RustLib.instance.api.crateApiTransferPackFileJrcFfi(
+  name: name,
+  mimeType: mimeType,
+  bytes: bytes,
+  judgePublicKey: judgePublicKey,
+);
+
+/// Recover a file from a JRC envelope with the judge's secret key.
+///
+/// `judge_secret_key` is the 32 raw bytes of the judge's X25519 secret key.
+/// The JRC binding check and the DCF3 digest both verify the recovered
+/// container before any metadata is trusted.
+OpticalFileData unpackFileJrcFfi({
+  required List<int> envelope,
+  required List<int> judgeSecretKey,
+}) => RustLib.instance.api.crateApiTransferUnpackFileJrcFfi(
+  envelope: envelope,
+  judgeSecretKey: judgeSecretKey,
+);
+
+/// Run a full JRC round trip in-process: keygen → pack → judge recover.
+/// Returns `true` on success; used by the app's diagnostics and by tests.
+bool jrcSelfTest() => RustLib.instance.api.crateApiTransferJrcSelfTest();
+
 /// Create a sending session for an already-packed container.
 ///
 /// `frame_bytes` is the total on-the-wire frame size (header + block); the

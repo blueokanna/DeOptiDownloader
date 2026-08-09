@@ -102,6 +102,36 @@ pub struct OpticalFileData {
     pub transmitted_size: u32,
 }
 
+/// A freshly generated JRC judge keypair (32-byte X25519 keys).
+///
+/// The public key is meant to be shared (the sender commits against it); the
+/// secret key is judge-only and must be kept safe by whoever may recover the
+/// transfer. Both are serialized as raw 32-byte little-endian X25519 scalars.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JudgeKeyPairData {
+    /// 32 raw bytes of the judge public key (`ek`).
+    pub public_key: Vec<u8>,
+    /// 32 raw bytes of the judge secret key (`dk`).
+    pub secret_key: Vec<u8>,
+}
+
+/// A file packed for judge-recoverable optical transfer (JRC mode).
+///
+/// `envelope` is the serialized JRC transcript (`magic ‖ c ‖ aux`) that flows
+/// through the fountain stream unchanged. Any camera pointed at the screen
+/// sees only the hiding commitment and ciphertext; only the designated judge
+/// (holding the matching secret key) recovers the original DCF3 container
+/// with [`unpack_file_jrc_ffi`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JrcPackedData {
+    /// Serialized JRC envelope fed to the fountain sender.
+    pub envelope: Vec<u8>,
+    /// Original file size in bytes.
+    pub original_size: u32,
+    /// Envelope size in bytes (what actually goes over the light).
+    pub transmitted_size: u32,
+}
+
 /// A decoded session manifest: the sender's metadata shown as the first QR
 /// so the receiver can preview the transfer before any data frame arrives.
 #[derive(Debug, Clone, PartialEq, Eq)]

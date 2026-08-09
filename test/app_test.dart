@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scan_downloader/src/app/app.dart';
+import 'package:scan_downloader/src/app/settings_controller.dart';
 import 'package:scan_downloader/src/rust/api/transfer.dart';
 import 'package:scan_downloader/src/rust/frb_generated.dart';
 
@@ -14,6 +15,11 @@ void main() {
 
   test('Rust self-test passes on host', () {
     final ok = runSelfTest();
+    expect(ok, isTrue);
+  });
+
+  test('JRC self-test passes on host (0.1.2 judge-recoverable)', () {
+    final ok = jrcSelfTest();
     expect(ok, isTrue);
   });
 
@@ -63,8 +69,37 @@ void main() {
     expect(decodeManifestFfi(bytes: [0xD1, 0x0F, 0x00, 0x00, 0x00]), isNull);
   });
 
+  test('JRC keygen → pack → judge-recover round-trips through the bridge',
+      () {
+    if (!encryptionSupported()) {
+      return; // Web build without the encryption feature.
+    }
+    final pair = jrcKeygenFfi();
+    expect(pair.publicKey.length, 32);
+    expect(pair.secretKey.length, 32);
+
+    final payload = Uint8List.fromList(utf8.encode('judge says: hello'));
+    final packed = packFileJrcFfi(
+      name: 'judge.txt',
+      mimeType: 'text/plain',
+      bytes: payload,
+      judgePublicKey: pair.publicKey,
+    );
+    expect(packed.envelope, isNotEmpty);
+    // The envelope is a JRC transcript, not a DCF3 container.
+    expect(packed.envelope.sublist(0, 4), [0x4A, 0x52, 0x43, 0x01]); // "JRC\x01"
+
+    final file = unpackFileJrcFfi(
+      envelope: packed.envelope,
+      judgeSecretKey: pair.secretKey,
+    );
+    expect(file.name, 'judge.txt');
+    expect(file.bytes, payload);
+  });
+
   testWidgets('Home page renders', (tester) async {
-    await tester.pumpWidget(const DeOptiApp());
+    final settings = AppSettings.create();
+    await tester.pumpWidget(DeOptiApp(settings: settings));
     await tester.pump();
     expect(find.text('DeOptiDownloader'), findsOneWidget);
     // Both mode cards are present.

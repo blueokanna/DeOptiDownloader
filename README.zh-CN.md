@@ -26,10 +26,23 @@ English version: [README.md](README.md)。
   `rustbinary` 二进制编解码器编码（见 `rust/src/api/manifest.rs`）。
 - **为流式传输调优的二维码层** —— 纠错级别 L、最小适配版本、Rust 内先降采样
   再解码，保证快速稳定的摄像头解码。
-- **可选端到端加密** —— XChaCha20-Poly1305 + 口令派生密钥（可选，见下文）。
+- **可选端到端加密（deopti_transfer 0.1.2）** —— XChaCha20-Poly1305 + 口令
+  派生密钥；**以及法官可恢复传输（JRC）**：发送方针对指定法官的公钥提交承诺，
+  任何摄像头只能看到隐藏承诺与密文，只有持有匹配私钥的法官才能恢复文件。两者
+  均为可选，并在所有原生构建中由 `encryption` Cargo 特性启用。
 - **Material 3 设计系统** —— Google 字体（Noto Sans SC，随包内置、全平台离线可
-  用）、完整 M3 色彩/形状/动效令牌、为手机/平板/桌面/Web/HarmonyOS 窗口自适应
-  的响应式布局。
+  用）；精选主题注册表（靛蓝浅色/深色、**AMOLED 深黑**——为 OLED 屏幕提供纯黑
+  表面、紫罗兰 *表现力*、午夜 *保真*、日落 *鲜明*、单色），每个主题均由
+  `ColorScheme.fromSeed` + Material 3 `DynamicSchemeVariant`（色彩风格）与 M3
+  形状/动效令牌构建。
+- **壁纸与模糊** —— 应用内背景可关闭、可选用随包内置的渐变壁纸，也可从相册
+  选择自定义照片，并带有可拖动的**高斯模糊滑杆（0–24 σ）**，在界面后方柔化
+  背景。
+- **i18n（ARB → gen-l10n）** —— 官方 Flutter 本地化流程：`en` + `zh` ARB 源
+  文件、运行时语言切换（跟随系统/English/中文），并通过
+  `flutter_localizations` 让 Material 组件完全本地化。
+- **预测性返回** —— 已设置 `android:enableOnBackInvokedCallback="true"`，
+  Android 13+ 将渲染系统预测性返回手势动画。
 - **全平台可用** —— Android、iOS、HarmonyOS Next、Windows、macOS、Linux、
   Web/WASM 与 Docker（容器化 Web 部署）。
 - **开箱即用的 CI** —— GitHub Actions 在每次推送时运行 Rust 检查/测试、Flutter
@@ -53,10 +66,13 @@ English version: [README.md](README.md)。
 | 传输时保持屏幕常亮             | ✅ `wakelock_plus`（发送与接收）             |
 | 发送端可调帧率 / 帧大小        | ✅ 10/15/20/24/30/60 fps，500–2953 字节帧    |
 | **新增：** 密码加密            | ✅ XChaCha20-Poly1305 + Argon2id（可选）     |
+| **新增：** 法官可恢复 JRC      | ✅ deopti_transfer 0.1.2 `pack_file_jrc`     |
 | **新增：** 自动重新锁定        | ✅ Rust 内流冲突自动重置                     |
 | **新增：** 会话清单二维码      | ✅ `rustbinary` 编码的设置码 + 接收预览      |
-| **新增：** 诊断自检            | ✅ 应用内 `runSelfTest()`（首页 → 诊断图标） |
+| **新增：** 诊断自检            | ✅ `runSelfTest()` + `jrcSelfTest()`         |
 | **新增：** Material 3 + 响应式 | ✅ Google 字体、M3 令牌、自适应布局          |
+| **新增：** 主题 + 壁纸         | ✅ AMOLED 深黑等 + 模糊 + 自定义照片         |
+| **新增：** i18n                | ✅ 官方 ARB/gen-l10n（中/英）                |
 
 ## 架构
 
@@ -81,10 +97,59 @@ English version: [README.md](README.md)。
        容器、加密）
 ```
 
-Rust crate 名为 `rust_lib_deopti_downloader`；桥接胶水代码位于
+Rust crate 名为 `rust_lib_scan_downloader`；桥接胶水代码位于
 `lib/src/rust/`（自动生成）。所有协议逻辑都在 `deopti_transfer` 中；
 `rustbinary` 被真实用于编码紧凑、有界的会话清单负载（见
 `rust/src/api/manifest.rs`）；应用层只负责适配桥接。
+
+## 外观：主题、壁纸与 i18n
+
+**主题**（`lib/src/app/theme/app_themes.dart`）。一套精选的 Material 3 主题
+注册表，每个主题均由 `ColorScheme.fromSeed` + `DynamicSchemeVariant`（M3 色彩
+风格）与共享的形状/动效令牌构建：
+
+| 主题          | 种子色      | 色彩风格（variant）   | 说明                          |
+| ------------- | ----------- | --------------------- | ----------------------------- |
+| 靛蓝浅色      | `#3D5AFE`   | `tonalSpot`           | 默认                          |
+| 靛蓝深色      | `#3D5AFE`   | `tonalSpot`           | 默认深色                      |
+| AMOLED 深黑   | `#9FA8FF`   | `tonalSpot`           | 纯黑表面（OLED）              |
+| 紫罗兰        | `#7C4DFF`   | `expressive`          | 浅色                          |
+| 午夜          | `#3949AB`   | `fidelity`            | 深色                          |
+| 日落          | `#FF6E40`   | `vibrant`             | 深色                          |
+| 单色          | `#9E9E9E`   | `monochrome`          | 浅色                          |
+
+设置页（首页 → 齿轮图标）可切换主题、主题模式（跟随系统/浅色/深色）与语言。
+设置通过 `shared_preferences` 持久化（`lib/src/app/settings_controller.dart`）。
+
+**壁纸**（`lib/src/app/theme/wallpaper.dart`）。三种模式：*无背景*（不显示图片，
+也无需模糊调节）、*内置壁纸*（`assets/images/wallpapers/` 中的五张渐变壁纸）、
+*自定义*（从相册选择照片，原生端存入应用支持目录 / Web 端存为 data URI）。
+启用壁纸后可拖动**高斯模糊滑杆（0–24 σ）**，通过 `ImageFilter.blur` 在整个应用
+后方渲染；界面表面会自动变为半透明，让背景透出，同时 on-* 前景色保持可读。
+
+**i18n**（`lib/l10n/*.arb`，由 `flutter gen-l10n` 生成）。官方 ARB →
+`AppLocalizations` 流程，配合 `flutter_localizations`；`en` + `zh` 源文件，
+支持跟随系统 / English / 中文 运行时切换。
+
+## 法官可恢复传输（JRC）
+
+`deopti_transfer` 0.1.2 新增 JRC 原语：发送方针对**指定法官的公钥**提交文件
+承诺；任何截获二维码流的摄像头只能看到隐藏承诺与密文；只有持有匹配**私钥**的
+法官才能恢复原始文件。
+
+- **发送方**：在发送页启用 *法官可恢复（JRC）*，粘贴法官公钥（64 位十六进制），
+  或用骰子按钮生成全新法官密钥对。打包后的 `envelope` 原样经过喷泉码流传输。
+- **法官/接收方**：在接收页，当 JRC 信封到达时应用会请求法官私钥——可直接输入，
+  或使用设置页保存的密钥。`unpack_file_jrc_ffi` 在给出文件前会校验绑定关系与
+  DCF3 摘要，因此错误密钥会被拒绝。
+- 端到端流程由 `jrcSelfTest()`（Rust）与 Flutter 测试套件覆盖；`encryption`
+  Cargo 特性通过 `rust/cargokit.yaml` 在所有原生构建中启用（Web 构建保持关闭，
+  因为 `wasm32-unknown-unknown` 上 `getrandom` 没有系统随机源）。
+
+## 预测性返回
+
+`AndroidManifest.xml` 已声明 `android:enableOnBackInvokedCallback="true"`，
+在 Android 13+ 上系统会为 Flutter 导航器播放预测性返回手势动画（目标 SDK 34+）。
 
 ## 平台支持
 
@@ -219,15 +284,16 @@ rust/
   server/               # deopti-server：纯 std 静态服务器（无 nginx）
 lib/
   main.dart             # 启动引导（Rust 初始化非阻塞、错误可见）
-  src/app/              # MaterialApp、M3 主题（Google 字体）、响应式工具
+  src/app/              # MaterialApp + 设置控制器 + 壁纸作用域
+  src/app/theme/        # app_themes（M3 注册表）、壁纸与持久化
   src/app/widgets/      # ModeCard 等共享 M3 组件
-  src/l10n/strings.dart # 中 / 英 UI 文案
+  src/l10n/             # ARB 源文件 + 生成的 AppLocalizations（gen-l10n）
   src/core/transfer/    # SenderController、ReceiverController、payload
   src/core/camera/      # CameraFrameSource + 插件 / HarmonyOS / Web 后端
   src/core/qr/          # QrPainter / QrDisplay
-  src/core/services/    # FileService（io / web）
+  src/core/services/    # FileService（io / web）、judge_keys 辅助
   src/core/util/        # formatBytes、尽力而为的 ScreenKeep
-  src/pages/            # 首页、发送、接收（响应式、带动画）
+  src/pages/            # 首页、发送、接收、设置（响应式、带动画）
   src/rust/             # 生成的 FRB 胶水代码（请勿手改）
 .github/workflows/      # ci.yml + deploy-pages.yml
 Dockerfile · scripts/build-web.ps1

@@ -1,16 +1,21 @@
-/// Central Material 3 design system.
+/// Material 3 design system for DeOptiDownloader.
 ///
-/// One place owns every visual decision: the color scheme, typography (Google
-/// Fonts Noto Sans SC, bundled), shape scale, motion curves and the component
-/// themes derived from them. Pages only reference semantic tokens from
-/// `Theme.of(context)` — they never hard-code radii, durations or fonts.
+/// One place owns every visual decision: the theme registry (seed color ×
+/// Material 3 "color style" × brightness), the typography (bundled Noto Sans
+/// SC), the shape scale and the component themes derived from them. Pages
+/// only reference semantic tokens from `Theme.of(context)` — they never
+/// hard-code radii, durations or fonts.
+///
+/// The registry exposes a handful of curated themes, including an AMOLED
+/// variant whose surfaces are pure black for OLED screens. Every palette is
+/// produced by `ColorScheme.fromSeed` with a `DynamicSchemeVariant` (the
+/// Material 3 color style), so contrast and tonal relationships stay
+/// algorithmically correct while the seed and style give each theme its
+/// character.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
-/// Seed color: calm indigo, tuned so QR blacks stay readable on surfaces.
-const Color kSeedColor = Color(0xFF3D5AFE);
 
 /// Motion durations for the whole app (Material motion tokens).
 abstract final class Motion {
@@ -36,14 +41,162 @@ abstract final class Shape {
       RoundedRectangleBorder(borderRadius: BorderRadius.circular(r));
 }
 
-/// Builds the full [ThemeData] for [brightness].
-ThemeData buildTheme({Brightness brightness = Brightness.light}) {
-  final scheme = ColorScheme.fromSeed(
-    seedColor: kSeedColor,
-    brightness: brightness,
+/// How the effective brightness is resolved.
+enum AppThemeMode {
+  system,
+  light,
+  dark;
+
+  bool get isDark => this == AppThemeMode.dark;
+
+  /// Resolves the brightness for [platformBrightness] under this mode.
+  Brightness resolve(Brightness platformBrightness) {
+    switch (this) {
+      case AppThemeMode.system:
+        return platformBrightness;
+      case AppThemeMode.light:
+        return Brightness.light;
+      case AppThemeMode.dark:
+        return Brightness.dark;
+    }
+  }
+}
+
+/// A curated Material 3 theme: seed color × color style × base brightness.
+///
+/// The `variant` is the Material 3 "color style" (`DynamicSchemeVariant`):
+/// tonal spot, expressive, fidelity, vibrant, monochrome, … Each produces a
+/// different but always accessible palette from the same seed.
+enum ThemeId {
+  indigoLight(
+    id: 'indigo_light',
+    seed: Color(0xFF3D5AFE),
+    variant: DynamicSchemeVariant.tonalSpot,
+    brightness: Brightness.light,
+  ),
+  indigoDark(
+    id: 'indigo_dark',
+    seed: Color(0xFF3D5AFE),
+    variant: DynamicSchemeVariant.tonalSpot,
+    brightness: Brightness.dark,
+  ),
+  amoledDark(
+    id: 'amoled_dark',
+    seed: Color(0xFF9FA8FF),
+    variant: DynamicSchemeVariant.tonalSpot,
+    brightness: Brightness.dark,
+    amoled: true,
+  ),
+  violet(
+    id: 'violet',
+    seed: Color(0xFF7C4DFF),
+    variant: DynamicSchemeVariant.expressive,
+    brightness: Brightness.light,
+  ),
+  midnight(
+    id: 'midnight',
+    seed: Color(0xFF3949AB),
+    variant: DynamicSchemeVariant.fidelity,
+    brightness: Brightness.dark,
+  ),
+  sunset(
+    id: 'sunset',
+    seed: Color(0xFFFF6E40),
+    variant: DynamicSchemeVariant.vibrant,
+    brightness: Brightness.dark,
+  ),
+  monochrome(
+    id: 'monochrome',
+    seed: Color(0xFF9E9E9E),
+    variant: DynamicSchemeVariant.monochrome,
+    brightness: Brightness.light,
   );
 
-  // Google Fonts Noto Sans SC — bundled, so this never touches the network.
+  const ThemeId({
+    required this.id,
+    required this.seed,
+    required this.variant,
+    required this.brightness,
+    this.amoled = false,
+  });
+
+  final String id;
+  final Color seed;
+  final DynamicSchemeVariant variant;
+  final Brightness brightness;
+
+  /// Pure-black surfaces for OLED screens (only meaningful for dark themes).
+  final bool amoled;
+
+  static ThemeId? fromId(String? id) {
+    if (id == null) {
+      return null;
+    }
+    for (final t in ThemeId.values) {
+      if (t.id == id) {
+        return t;
+      }
+    }
+    return null;
+  }
+
+  /// All themes, grouped by effective brightness for the settings page.
+  static List<ThemeId> ofBrightness(Brightness brightness) => values
+      .where((t) => t.brightness == brightness || t.amoled)
+      .toList(growable: false);
+}
+
+/// A convenience accessor matching the old `theme.dart` API.
+const Color kSeedColor = Color(0xFF3D5AFE);
+
+/// Builds the full [ThemeData] for [theme] at [brightness].
+///
+/// When [translucent] is true (a wallpaper is active) the surface tones are
+/// given a small alpha so the background image glows through the UI; the
+/// readable on-* colors are untouched, so contrast is preserved.
+ThemeData buildTheme(
+  ThemeId theme, {
+  required Brightness brightness,
+  bool translucent = false,
+}) {
+  var scheme = ColorScheme.fromSeed(
+    seedColor: theme.seed,
+    brightness: brightness,
+    dynamicSchemeVariant: theme.variant,
+  );
+
+  if (theme.amoled) {
+    // True black surfaces for OLED: keep the seeded tonal palette for
+    // containers/primary but pin the base surfaces to pure black.
+    scheme = scheme.copyWith(
+      surface: Colors.black,
+      surfaceDim: Colors.black,
+      surfaceBright: const Color(0xFF141414),
+      surfaceContainerLowest: Colors.black,
+      surfaceContainerLow: Colors.black,
+      surfaceContainer: const Color(0xFF0E0E0E),
+      surfaceContainerHigh: const Color(0xFF1A1A1A),
+      surfaceContainerHighest: const Color(0xFF242424),
+      onSurface: Colors.white,
+      onSurfaceVariant: const Color(0xFFC7C5D0),
+      outline: const Color(0xFF8B8A94),
+      outlineVariant: const Color(0xFF3B3B40),
+    );
+  }
+
+  if (translucent) {
+    final surface = scheme.surface.withValues(alpha: 0.84);
+    scheme = scheme.copyWith(
+      surface: surface,
+      surfaceContainerLowest: scheme.surfaceContainerLowest.withValues(alpha: 0.84),
+      surfaceContainerLow: scheme.surfaceContainerLow.withValues(alpha: 0.84),
+      surfaceContainer: scheme.surfaceContainer.withValues(alpha: 0.80),
+      surfaceContainerHigh: scheme.surfaceContainerHigh.withValues(alpha: 0.80),
+      surfaceContainerHighest: scheme.surfaceContainerHighest.withValues(alpha: 0.76),
+    );
+  }
+
+  // Bundled Noto Sans SC — never touches the network.
   final baseText = ThemeData(brightness: brightness).textTheme;
   final textTheme = GoogleFonts.notoSansScTextTheme(baseText).apply(
     bodyColor: scheme.onSurface,
@@ -69,6 +222,7 @@ ThemeData buildTheme({Brightness brightness = Brightness.light}) {
   );
 
   return base.copyWith(
+    scaffoldBackgroundColor: scheme.surface,
     appBarTheme: AppBarTheme(
       centerTitle: false,
       backgroundColor: scheme.surface,
@@ -192,4 +346,3 @@ ThemeData buildTheme({Brightness brightness = Brightness.light}) {
     ),
   );
 }
-

@@ -93,6 +93,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_i_32(dynamic raw);
 
   @protected
+  JrcPackedData dco_decode_jrc_packed_data(dynamic raw);
+
+  @protected
+  JudgeKeyPairData dco_decode_judge_key_pair_data(dynamic raw);
+
+  @protected
   Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
 
   @protected
@@ -233,6 +239,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
+
+  @protected
+  JrcPackedData sse_decode_jrc_packed_data(SseDeserializer deserializer);
+
+  @protected
+  JudgeKeyPairData sse_decode_judge_key_pair_data(SseDeserializer deserializer);
 
   @protected
   Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
@@ -387,6 +399,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_jrc_packed_data(JrcPackedData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_judge_key_pair_data(
+    JudgeKeyPairData self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_prim_u_32_strict(
