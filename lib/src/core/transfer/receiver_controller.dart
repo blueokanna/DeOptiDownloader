@@ -183,10 +183,9 @@ class ReceiverController extends ChangeNotifier {
 
   /// Adaptive decode budget: ~40 fps while ROI-tracking a locked symbol
   /// (decodes are a few ms on the crop), ~20 fps while searching for a lock.
-  Duration get decodeInterval =>
-      (_tracker.active && hasSignal)
-          ? kLockedDecodeInterval
-          : kMinDecodeInterval;
+  Duration get decodeInterval => (_tracker.active && hasSignal)
+      ? kLockedDecodeInterval
+      : kMinDecodeInterval;
 
   /// Decode worker: takes the latest frame, decodes it (Rust worker thread,
   /// ROI-tracked), admits the payload and folds it into the fountain.
