@@ -45,6 +45,15 @@ RUN curl -sSL https://github.com/rustwasm/wasm-pack/releases/download/v0.15.0/wa
  && curl -sSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.92/wasm-bindgen-0.2.92-x86_64-unknown-linux-musl.tar.gz \
       | tar -xz -C /usr/local/bin --strip-components=1 wasm-bindgen-0.2.92-x86_64-unknown-linux-musl/wasm-bindgen
 
+# Fail fast: verify every tool `flutter_rust_bridge build-web` depends on
+# actually executes on this base image. A missing/broken rustc, cargo,
+# wasm-pack or wasm-bindgen would otherwise surface 20 minutes later as an
+# unreadable "exit code: 255" at the build-web step.
+RUN rustc --version \
+ && cargo --version \
+ && wasm-pack --version \
+ && wasm-bindgen --version
+
 # Install the pinned Flutter SDK from the official release archive (Dart
 # 3.12.2, satisfies the locked `dart: >=3.12.2` requirement). Kept in its own
 # layer so the ~600 MB download is cached across rebuilds.
@@ -70,6 +79,10 @@ COPY web ./web
 COPY assets ./assets
 
 # 3) Build the Rust WASM module into web/pkg/ (bridge glue is committed).
+#    NOTE: `wasm-opt` is disabled for this build via
+#    `[package.metadata.wasm-pack.profile.release] wasm-opt = false` in
+#    rust/Cargo.toml — the FRB build-web pipeline emits an atomics-featured
+#    wasm that binaryen's wasm-opt cannot process (exit 255).
 RUN dart run flutter_rust_bridge build-web --release --dart-root /app
 
 # 4) Build the Flutter Web bundle (dart2js + Rust WASM).
