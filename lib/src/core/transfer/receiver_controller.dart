@@ -112,10 +112,6 @@ class ReceiverController extends ChangeNotifier {
   int acceptedFrames = 0;
   double decodeFps = 0;
 
-  /// Measured wall time of the last decode attempt (Rust worker round trip),
-  /// kept for diagnostics and future adaptive tuning.
-  Duration _lastDecodeDuration = Duration.zero;
-
   /// Completed transfer (unencrypted or after password).
   OpticalFileData? completed;
   bool passwordRequired = false;
@@ -215,13 +211,11 @@ class ReceiverController extends ChangeNotifier {
   Future<void> _processFrame(LumaFrame frame) async {
     _decoding = true;
     _lastDecodeAt = frame.timestamp;
-    final stopwatch = Stopwatch()..start();
     try {
       final result = await _decodeTracked(frame);
       if (_disposed) {
         return;
       }
-      _lastDecodeDuration = stopwatch.elapsed;
       _tracker = result.tracker;
       final bytes = result.bytes;
       if (bytes == null) {

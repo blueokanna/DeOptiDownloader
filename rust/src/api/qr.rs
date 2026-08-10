@@ -211,6 +211,7 @@ pub fn qr_decode_rgba(
 struct DecodedQr {
     bytes: Vec<u8>,
     points: Vec<(f32, f32)>,
+    mean_luma: u8,
 }
 
 /// Run one tracked decode over a *scan-space* luma buffer (larger side
@@ -278,7 +279,7 @@ fn decode_tracked_scan(
     // Full-frame finder-pattern search: first lock, or after ROI misses.
     if let Some(qr) = decode_scan_coarse_to_fine(gray, width, height, max_dim)? {
         let mut t2 = QrTrackerState::new();
-        t2.last_threshold = luma::mean_luma(&gray);
+        t2.last_threshold = qr.mean_luma;
         update_tracker_roi(&mut t2, &qr.points, width, height);
         t2.qr_version = qr_version_for(qr.bytes.len()).unwrap_or(0);
         return Ok(QrDecodeResult {
@@ -383,6 +384,10 @@ fn decode_scan_coarse_to_fine(
     }
     let (small, sw, sh) = downscale(&gray, width, height, FAST_DIM);
     if let Some(mut qr) = decode_luma(small, sw, sh, false)? {
+        // Tracking compares whole-frame brightness between frames. The fast
+        // decode ran on a reduced copy, while the original scan is still
+        // available here, so record the full scan's mean only after success.
+        qr.mean_luma = luma::mean_luma(&gray);
         let sx = width as f32 / sw as f32;
         let sy = height as f32 / sh as f32;
         for p in &mut qr.points {
@@ -416,7 +421,8 @@ fn decode_luma(
 ) -> Result<Option<DecodedQr>, String> {
     use rxing::common::HybridBinarizer;
     use rxing::{
-        BarcodeFormat, BinaryBitmap, DecodeHints, Luma8LuminanceSource, MultiFormatReader, Reader,
+        BarcodeFormat, BinaryBitmap, DecodeHints, Luma8LuminanceSource, LuminanceSource,
+        MultiFormatReader, Reader,
     };
 
     let source =
@@ -440,9 +446,11 @@ fn decode_luma(
                 .iter()
                 .map(|p| (p.x, p.y))
                 .collect::<Vec<_>>();
+            let mean_luma = luma::mean_luma(bitmap.get_source().get_matrix().as_ref());
             Ok(Some(DecodedQr {
                 bytes: raw.to_vec(),
                 points,
+                mean_luma,
             }))
         }
         Err(_) => Ok(None),

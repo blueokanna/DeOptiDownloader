@@ -57,7 +57,6 @@ concurrency:
 
 env:
   FLUTTER_VERSION: '3.44.6'
-  WASM_BINDGEN_VERSION: '0.2.92'
   # Deployment topology. Default "/" matches a dedicated custom domain or a
   # subdomain (e.g. app.pulselink.top). If you serve at a github.io subpath
   # instead (blueokanna.github.io/DeOptiDownloader/), pass /DeOptiDownloader/
@@ -73,6 +72,7 @@ jobs:
   preflight:
     name: Verify GitHub Pages
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Check GitHub Pages (enable if missing)
         env:
@@ -112,34 +112,14 @@ jobs:
   build:
     name: Build Web bundle
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     needs: preflight
     steps:
       - uses: actions/checkout@v4
 
-      - uses: subosito/flutter-action@v2
+      - uses: ./.github/actions/setup-web-toolchain
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
-
-      # FRB build-web compiles with -Z build-std (nightly + rust-src).
-      - uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rust-src
-          targets: wasm32-unknown-unknown
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: rust
-
-      - name: Install wasm-pack and matching wasm-bindgen-cli (prebuilt)
-        run: |
-          curl -sSL https://github.com/rustwasm/wasm-pack/releases/download/v0.15.0/wasm-pack-v0.15.0-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /tmp
-          sudo cp /tmp/wasm-pack-v0.15.0-x86_64-unknown-linux-musl/wasm-pack /usr/local/bin/
-          curl -sSL https://github.com/rustwasm/wasm-bindgen/releases/download/${{ env.WASM_BINDGEN_VERSION }}/wasm-bindgen-${{ env.WASM_BINDGEN_VERSION }}-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /tmp
-          sudo cp /tmp/wasm-bindgen-${{ env.WASM_BINDGEN_VERSION }}-x86_64-unknown-linux-musl/wasm-bindgen /usr/local/bin/
-          wasm-pack --version
-          wasm-bindgen --version
 
       - name: Resolve Dart dependencies
         run: flutter pub get
@@ -163,6 +143,7 @@ jobs:
     name: Deploy to GitHub Pages
     needs: [preflight, build]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

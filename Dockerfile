@@ -55,10 +55,9 @@ RUN rustup component add rust-src --toolchain nightly \
  && rustup target add wasm32-unknown-unknown --toolchain nightly \
  && rustup component list --toolchain nightly | grep -q rust-src \
  && rustup target list --installed | grep -q wasm32-unknown-unknown
-RUN curl -sSL https://github.com/rustwasm/wasm-pack/releases/download/v0.15.0/wasm-pack-v0.15.0-x86_64-unknown-linux-musl.tar.gz \
-      | tar -xz -C /usr/local/bin --strip-components=1 wasm-pack-v0.15.0-x86_64-unknown-linux-musl/wasm-pack \
- && curl -sSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.92/wasm-bindgen-0.2.92-x86_64-unknown-linux-musl.tar.gz \
-      | tar -xz -C /usr/local/bin --strip-components=1 wasm-bindgen-0.2.92-x86_64-unknown-linux-musl/wasm-bindgen
+COPY scripts/install-wasm-tools.sh /usr/local/src/install-wasm-tools.sh
+RUN bash /usr/local/src/install-wasm-tools.sh /usr/local/bin /tmp/wasm-tools \
+ && rm -rf /tmp/wasm-tools
 
 # Fail fast: verify every tool `flutter_rust_bridge build-web` depends on
 # actually executes on this base image. A missing/broken rustc, cargo,

@@ -1,0 +1,38 @@
+name: Set up Web build toolchain
+description: Install the pinned Flutter, Rust nightly, wasm-pack, and wasm-bindgen toolchain.
+
+inputs:
+  flutter-version:
+    description: Exact Flutter SDK version.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ inputs.flutter-version }}
+        channel: stable
+        cache: true
+
+    - name: Set up Rust nightly
+      uses: dtolnay/rust-toolchain@nightly
+      with:
+        components: rust-src
+        targets: wasm32-unknown-unknown
+
+    - name: Restore Rust build cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: rust
+
+    - name: Install pinned WASM tools
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        bin_dir="${RUNNER_TEMP}/deopti-wasm-tools/bin"
+        download_dir="${RUNNER_TEMP}/deopti-wasm-tools/downloads"
+        bash "${GITHUB_WORKSPACE}/scripts/install-wasm-tools.sh" "${bin_dir}" "${download_dir}"
+        echo "${bin_dir}" >> "${GITHUB_PATH}"
