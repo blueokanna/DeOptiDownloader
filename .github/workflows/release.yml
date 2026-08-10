@@ -456,7 +456,8 @@ jobs:
         run: dart run flutter_rust_bridge build-web --release --dart-root ${{ github.workspace }}
 
       - name: Build Flutter Web bundle
-        run: flutter build web --release
+        # Served at the root by the Docker image / static hosts → base href "/".
+        run: flutter build web --release --base-href /
 
       - name: Stage artifact
         shell: bash

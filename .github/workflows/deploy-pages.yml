@@ -16,9 +16,17 @@
 # and it is what makes `actions/deploy-pages` fail on a fresh repo — the
 # preflight turns it into either an automatic fix or a precise diagnostic.
 #
-# Custom domain: if a custom domain is configured (see Settings → Pages), its
-# DNS records (A/AAAA or CNAME plus the required TXT verification) must be in
-# place or GitHub keeps the site in "errored" state and deployments 404.
+# Custom domain: a custom domain can be attached to only ONE GitHub Pages
+# site at a time. If the personal blog already owns `pulselink.top`, requests
+# to `pulselink.top/<anything>` are served by the BLOG's site (its SPA
+# fallback shows the blog index — that is why `pulselink.top/DeOptiDownloader/`
+# displayed the blog instead of this app). Resolve by picking one topology:
+#   A. Dedicated subdomain: set the app repo's custom domain to a subdomain
+#      (e.g. `app.pulselink.top`, CNAME → `<user>.github.io`) and keep the
+#      blog on the apex. BASE_HREF stays "/".
+#   B. github.io subpath: remove the custom domain from this repo and serve at
+#      `https://<user>.github.io/<repo>/` with --base-href "/<repo>/".
+# Either way the Flutter build's --base-href MUST equal the deployment path.
 #
 # Cross-origin isolation: the sync FRB bridge used by this app does NOT need
 # SharedArrayBuffer, so GitHub Pages (which cannot send custom COOP/COEP
@@ -31,6 +39,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      base_href:
+        description: 'Base href for the Flutter web build — "/" (default) for a custom-domain/subdomain root, "/DeOptiDownloader/" for a github.io subpath.'
+        required: false
+        default: '/'
+        type: string
 
 permissions:
   contents: read
@@ -44,6 +58,12 @@ concurrency:
 env:
   FLUTTER_VERSION: '3.44.6'
   WASM_BINDGEN_VERSION: '0.2.92'
+  # Deployment topology. Default "/" matches a dedicated custom domain or a
+  # subdomain (e.g. app.pulselink.top). If you serve at a github.io subpath
+  # instead (blueokanna.github.io/DeOptiDownloader/), pass /DeOptiDownloader/
+  # via the workflow_dispatch input or change this value — the Flutter build
+  # MUST use the same base href as the deployment path or asset URLs 404.
+  BASE_HREF: /
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -128,7 +148,7 @@ jobs:
         run: dart run flutter_rust_bridge build-web --release --dart-root ${{ github.workspace }}
 
       - name: Build Flutter Web bundle
-        run: flutter build web --release
+        run: flutter build web --release --base-href "${{ inputs.base_href || env.BASE_HREF }}"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

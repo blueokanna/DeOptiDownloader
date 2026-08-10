@@ -10,6 +10,19 @@ resolver = "2"
 [lib]
 crate-type = ["cdylib", "staticlib"]
 
+# Disable wasm-pack's `wasm-opt` step for the release profile. The FRB
+# `build-web` pipeline builds with `-C target-feature=+atomics,+bulk-memory`
+# (RUSTFLAGS); wasm-opt (binaryen) cannot process that atomics-featured wasm
+# and fails — `os error 32` on Windows, a binaryen error on Linux — which
+# surfaces as `dart run flutter_rust_bridge build-web` exiting 255 in CI and
+# Docker. Disabling it only skips the size optimization; the module is fully
+# functional and the sync FRB bridge is unaffected.
+# NOTE: this key must live under `profile.release` — wasm-pack 0.15.0 only
+# reads `wasm-opt` at the profile level, not directly under
+# `package.metadata.wasm-pack` (that placement is reported as an unknown key).
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
 [features]
 default = []
 encryption = ["deopti_transfer/encryption", "dep:getrandom"]

@@ -351,6 +351,20 @@ threaded WASM build keeps working and SharedArrayBuffer stays available.
 GitHub Pages works too (the `deploy-pages.yml` workflow), because the current
 synchronous bridge does not require cross-origin isolation.
 
+> **GitHub Pages custom-domain note.** A custom domain can be attached to only
+> *one* Pages site. If your personal blog already owns `pulselink.top`, then
+> `pulselink.top/<anything>` is served by the blog's site — its SPA fallback
+> shows the blog index, which is why `pulselink.top/DeOptiDownloader/` displays
+> the blog instead of this app. Pick one topology:
+> - **A. Dedicated subdomain** (recommended): set this repo's custom domain to
+>   e.g. `app.pulselink.top` (CNAME → `<user>.github.io`) and keep the blog on
+>   the apex. The web build uses `--base-href /` (the default).
+> - **B. github.io subpath**: remove the custom domain from this repo and serve
+>   at `https://<user>.github.io/<repo>/` — pass `--base-href /<repo>/` to the
+>   deploy workflow (dispatch input `base_href`).
+> In both cases the Flutter build's `--base-href` MUST equal the deployment
+> path or asset URLs 404.
+
 > Note: the app is **not** built with Flutter's experimental `--wasm`
 > renderer — that mode is incompatible with the `dart:html` camera/file
 > backends and the FRB runtime. The production Web build is dart2js + Rust

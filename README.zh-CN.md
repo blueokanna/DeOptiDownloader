@@ -299,6 +299,20 @@ Rust `deopti-server`（见下一节）发送 `Cross-Origin-Opener-Policy: same-o
 构建时继续可用、并保留 SharedArrayBuffer 能力。由于当前同步桥接不要求跨域隔离，
 GitHub Pages（`deploy-pages.yml` 工作流）同样可用。
 
+> **GitHub Pages 自定义域名注意事项。** 一个自定义域名只能绑定到**一个**
+> Pages 站点。如果你的个人博客已占用 `pulselink.top`，那么
+> `pulselink.top/<任意路径>` 都会由博客站点响应——博客的 SPA 兜底会把未知
+> 路径返回博客首页，这正是 `pulselink.top/DeOptiDownloader/` 显示博客而非本
+> 应用的原因。请选择一种拓扑：
+> - **A. 专用子域名（推荐）**：把本仓库的自定义域名设为如 `app.pulselink.top`
+>   （CNAME → `<user>.github.io`），博客保留主域名。Web 构建使用默认的
+>   `--base-href /`。
+> - **B. github.io 子路径**：从本仓库移除自定义域名，改用
+>   `https://<user>.github.io/<repo>/` 访问——部署时通过手动触发参数
+>   `base_href` 传入 `--base-href /<repo>/`。
+> 两种方式下，Flutter 构建的 `--base-href` 都必须与部署路径一致，否则资源
+> 404。
+
 > 注意：应用**不**使用 Flutter 实验性的 `--wasm` 渲染器——该模式与 `dart:html`
 > 摄像头/文件后端及 FRB 运行时不兼容。生产 Web 构建为 dart2js + Rust WASM，完全
 > 受支持。
