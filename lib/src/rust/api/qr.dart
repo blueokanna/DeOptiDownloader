@@ -7,7 +7,8 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `decode_luma`, `downscale`
+// These functions are ignored because they are not marked as `pub`: `crop_roi`, `decode_luma`, `decode_scan_coarse_to_fine`, `decode_tracked_scan`, `downscale`, `update_tracker_roi`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DecodedQr`
 
 /// Smallest QR version (1..=40) whose ECC-L byte capacity holds `frame_bytes`,
 /// or `None` when it does not fit in a Version-40 symbol.
@@ -15,10 +16,87 @@ int? qrVersionFor({required BigInt frameBytes}) =>
     RustLib.instance.api.crateApiQrQrVersionFor(frameBytes: frameBytes);
 
 /// Encode raw bytes into a QR module matrix (ECC L, smallest fitting version).
+///
+/// Uses `qrcodegen` (≈8× faster than the previous `qrcode` crate at
+/// Version-40 payloads) so the sender can sustain high frame rates even for
+/// the largest frame size. Byte mode matches the ISO/IEC 18004 capacity table
+/// the sender uses to pick a version.
 QrMatrix qrEncode({required List<int> data}) =>
     RustLib.instance.api.crateApiQrQrEncode(data: data);
 
-/// Decode a QR from a tight grayscale (luma8) buffer, optionally downscaled.
+/// Decode a QR from a raw YUV Y plane (Android / iOS / HarmonyOS), converting
+/// and box-downscaling it to scan space with SIMD, then tracking the symbol
+/// across frames.
+Future<QrDecodeResult> qrDecodeYplaneTracked({
+  required List<int> yPlane,
+  required int width,
+  required int height,
+  required int rowStride,
+  required int pixelStride,
+  int? maxScanDim,
+  required QrTrackerState tracker,
+}) => RustLib.instance.api.crateApiQrQrDecodeYplaneTracked(
+  yPlane: yPlane,
+  width: width,
+  height: height,
+  rowStride: rowStride,
+  pixelStride: pixelStride,
+  maxScanDim: maxScanDim,
+  tracker: tracker,
+);
+
+/// Decode a QR from a raw BGRA8888 frame (Windows / macOS fallback), with
+/// SIMD luma conversion + box downscale, then tracking.
+Future<QrDecodeResult> qrDecodeBgraTracked({
+  required List<int> bgra,
+  required int width,
+  required int height,
+  required int rowStride,
+  int? maxScanDim,
+  required QrTrackerState tracker,
+}) => RustLib.instance.api.crateApiQrQrDecodeBgraTracked(
+  bgra: bgra,
+  width: width,
+  height: height,
+  rowStride: rowStride,
+  maxScanDim: maxScanDim,
+  tracker: tracker,
+);
+
+/// Decode a QR from a tight grayscale (luma8) buffer with ROI tracking.
+///
+/// Used by the web path (canvas already yields tight frames) and by callers
+/// that converted to gray elsewhere.
+Future<QrDecodeResult> qrDecodeGrayTracked({
+  required List<int> gray,
+  required int width,
+  required int height,
+  int? maxScanDim,
+  required QrTrackerState tracker,
+}) => RustLib.instance.api.crateApiQrQrDecodeGrayTracked(
+  gray: gray,
+  width: width,
+  height: height,
+  maxScanDim: maxScanDim,
+  tracker: tracker,
+);
+
+/// Decode a QR from an RGBA buffer (web canvas path) with ROI tracking.
+Future<QrDecodeResult> qrDecodeRgbaTracked({
+  required List<int> rgba,
+  required int width,
+  required int height,
+  int? maxScanDim,
+  required QrTrackerState tracker,
+}) => RustLib.instance.api.crateApiQrQrDecodeRgbaTracked(
+  rgba: rgba,
+  width: width,
+  height: height,
+  maxScanDim: maxScanDim,
+  tracker: tracker,
+);
+
+/// Decode a QR from a tight grayscale (luma8) buffer (single shot).
 Future<Uint8List?> qrDecodeGray({
   required List<int> gray,
   required int width,
@@ -31,7 +109,7 @@ Future<Uint8List?> qrDecodeGray({
   maxScanDim: maxScanDim,
 );
 
-/// Decode a QR from an RGBA buffer, extracting luminance first.
+/// Decode a QR from an RGBA buffer, extracting luminance first (single shot).
 Future<Uint8List?> qrDecodeRgba({
   required List<int> rgba,
   required int width,

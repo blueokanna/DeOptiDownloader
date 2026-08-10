@@ -103,7 +103,7 @@ class WebCameraSource implements CameraFrameSource {
         data: bytes,
         width: w,
         height: h,
-        rgba: true,
+        format: LumaFormat.rgba,
         timestamp: DateTime.now(),
       ),
     );

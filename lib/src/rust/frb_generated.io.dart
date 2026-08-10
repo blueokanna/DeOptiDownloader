@@ -78,6 +78,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ManifestPayload dco_decode_box_autoadd_manifest_payload(dynamic raw);
 
   @protected
+  QrTrackerState dco_decode_box_autoadd_qr_tracker_state(dynamic raw);
+
+  @protected
   int dco_decode_box_autoadd_u_16(dynamic raw);
 
   @protected
@@ -97,6 +100,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   JudgeKeyPairData dco_decode_judge_key_pair_data(dynamic raw);
+
+  @protected
+  Float64List dco_decode_list_prim_f_64_strict(dynamic raw);
 
   @protected
   Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
@@ -144,7 +150,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PushStatus dco_decode_push_status(dynamic raw);
 
   @protected
+  QrDecodeResult dco_decode_qr_decode_result(dynamic raw);
+
+  @protected
   QrMatrix dco_decode_qr_matrix(dynamic raw);
+
+  @protected
+  QrTrackerState dco_decode_qr_tracker_state(dynamic raw);
 
   @protected
   ReceiverOutcome dco_decode_receiver_outcome(dynamic raw);
@@ -226,6 +238,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QrTrackerState sse_decode_box_autoadd_qr_tracker_state(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   int sse_decode_box_autoadd_u_16(SseDeserializer deserializer);
 
   @protected
@@ -245,6 +262,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   JudgeKeyPairData sse_decode_judge_key_pair_data(SseDeserializer deserializer);
+
+  @protected
+  Float64List sse_decode_list_prim_f_64_strict(SseDeserializer deserializer);
 
   @protected
   Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
@@ -296,7 +316,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PushStatus sse_decode_push_status(SseDeserializer deserializer);
 
   @protected
+  QrDecodeResult sse_decode_qr_decode_result(SseDeserializer deserializer);
+
+  @protected
   QrMatrix sse_decode_qr_matrix(SseDeserializer deserializer);
+
+  @protected
+  QrTrackerState sse_decode_qr_tracker_state(SseDeserializer deserializer);
 
   @protected
   ReceiverOutcome sse_decode_receiver_outcome(SseDeserializer deserializer);
@@ -386,6 +412,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_qr_tracker_state(
+    QrTrackerState self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_u_16(int self, SseSerializer serializer);
 
   @protected
@@ -406,6 +438,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_judge_key_pair_data(
     JudgeKeyPairData self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_f_64_strict(
+    Float64List self,
     SseSerializer serializer,
   );
 
@@ -479,7 +517,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_push_status(PushStatus self, SseSerializer serializer);
 
   @protected
+  void sse_encode_qr_decode_result(
+    QrDecodeResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_qr_matrix(QrMatrix self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_qr_tracker_state(
+    QrTrackerState self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_receiver_outcome(

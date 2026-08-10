@@ -1,0 +1,563 @@
+# Build production artifacts for every supported platform and publish them as
+# a GitHub Release.
+#
+# Triggers:
+#   - push of a `v*` tag        → version is taken from the tag (e.g. `v1.2.3`
+#                                or `v1.2.3+45`), release is published now.
+#   - manual `workflow_dispatch`→ version from the input (or pubspec.yaml),
+#                                release is created as a DRAFT for review.
+#
+# Artifacts: Android APKs (per ABI) + App Bundle, Windows x64, Linux x64,
+# macOS .app, unsigned iOS .app, Web/WASM bundle, and a Docker image pushed
+# to GHCR (ghcr.io/<owner>/<repo>:v<version> and :latest).
+#
+# Signing:
+#   Android release APKs are signed with the keystore decoded from the
+#   ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS /
+#   ANDROID_KEY_PASSWORD secrets when configured; otherwise the Gradle
+#   fallback signs with the debug key (installable, not store-ready — a
+#   warning is printed).
+#   iOS is built with --no-codesign (no Apple account is required on CI); the
+#   resulting .app is explicitly labelled "unsigned".
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 1.2.3). Leave empty to use the git tag.'
+        required: false
+        type: string
+      prerelease:
+        description: 'Mark this release as a pre-release'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pin the exact toolchain the project is developed against (see .metadata).
+  FLUTTER_VERSION: '3.44.6'
+  WASM_BINDGEN_VERSION: '0.2.92'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Resolve the release version from the tag / input / pubspec.yaml once, so
+  # every build job uses the same version without re-parsing it.
+  # ---------------------------------------------------------------------------
+  version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      build_number: ${{ steps.resolve.outputs.build_number }}
+      release_tag: ${{ steps.resolve.outputs.release_tag }}
+      prerelease: ${{ steps.resolve.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version from tag, input or pubspec
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION=""
+          BUILD=""
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            # Manual dispatch: version comes from the input verbatim.
+            VERSION="${{ github.event.inputs.version }}"
+            BUILD="${GITHUB_RUN_NUMBER}"
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            # Tag like "v1.2.3" or "v1.2.3+45" → "1.2.3" / build "45".
+            RAW="${GITHUB_REF_NAME#v}"
+            VERSION="${RAW%%+*}"
+            if [[ "$RAW" == *"+"* ]]; then
+              BUILD="${RAW#*+}"
+            else
+              BUILD="1"
+            fi
+          else
+            # Fallback: pubspec version "1.0.0+1" → "1.0.0" / build "1".
+            # (GitHub runs bash with -e -o pipefail; avoid `read` on empty.)
+            PUB="$(sed -n 's/^version: \([0-9][0-9.]*\)+\([0-9][0-9]*\).*/\1 \2/p' pubspec.yaml)"
+            if [ -n "$PUB" ]; then
+              set -- $PUB
+              VERSION="$1"
+              BUILD="${2:-${GITHUB_RUN_NUMBER}}"
+            else
+              VERSION="$(sed -n 's/^version: \([0-9][0-9.]*\).*/\1/p' pubspec.yaml)"
+              [ -n "$VERSION" ] || VERSION="0.0.0"
+              BUILD="${GITHUB_RUN_NUMBER}"
+            fi
+          fi
+
+          PRERELEASE="false"
+          case "$VERSION" in *-*) PRERELEASE="true";; esac
+          if [ "${{ github.event.inputs.prerelease }}" = "true" ]; then
+            PRERELEASE="true"
+          fi
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "build_number=${BUILD}" >> "$GITHUB_OUTPUT"
+          echo "release_tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=${PRERELEASE}" >> "$GITHUB_OUTPUT"
+          echo "Resolved version=${VERSION} (build ${BUILD}), prerelease=${PRERELEASE}"
+
+  # ---------------------------------------------------------------------------
+  # Android: release APKs (split per ABI) + App Bundle.
+  # ---------------------------------------------------------------------------
+  android:
+    name: Android (APK + AAB)
+    runs-on: ubuntu-latest
+    needs: version
+    steps:
+      - uses: actions/checkout@v4
+
+      # AGP 8.13 requires JDK 17 (Kotlin targets JVM 17 in build.gradle.kts).
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # cargokit compiles the Rust core for every Android ABI via the NDK.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: >-
+            aarch64-linux-android,
+            armv7-linux-androideabi,
+            x86_64-linux-android,
+            i686-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      # Same NDK version used locally; AGP auto-installs a missing NDK anyway.
+      - name: Install Android NDK
+        shell: bash
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ -x "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --install "ndk;26.2.11394342" >/dev/null
+          else
+            echo "::warning::sdkmanager not found at $SDKMANAGER; relying on AGP NDK auto-install"
+          fi
+
+      - name: Configure release signing (from secrets, optional)
+        shell: bash
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/release-keystore.jks"
+            {
+              echo "storeFile=$RUNNER_TEMP/release-keystore.jks"
+              echo "storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
+              echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}"
+              echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}"
+            } > android/key.properties
+            echo "::notice::Android release signing configured from secrets."
+          else
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set — APKs/AAB will be signed with the DEBUG key (installable, not store-ready)."
+          fi
+
+      - name: Resolve Dart dependencies
+        run: flutter pub get
+
+      - name: Build release APKs (split per ABI)
+        run: >-
+          flutter build apk --release --split-per-abi
+          --build-name=${{ needs.version.outputs.version }}
+          --build-number=${{ needs.version.outputs.build_number }}
+
+      - name: Build release App Bundle
+        run: >-
+          flutter build appbundle --release
+          --build-name=${{ needs.version.outputs.version }}
+          --build-number=${{ needs.version.outputs.build_number }}
+
+      - name: Stage artifacts
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          V="${{ needs.version.outputs.version }}"
+          for f in build/app/outputs/flutter-apk/*.apk; do
+            [ -f "$f" ] || continue
+            base="$(basename "$f" .apk)"           # e.g. app-arm64-v8a-release
+            cp "$f" "artifacts/deopti-downloader-${base}-v${V}.apk"
+          done
+          cp build/app/outputs/bundle/release/app-release.aab \
+             "artifacts/deopti-downloader-v${V}.aab"
+          ls -la artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-android
+          path: artifacts
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Windows: x64 release bundle (zip).
+  # ---------------------------------------------------------------------------
+  windows:
+    name: Windows (x64)
+    runs-on: windows-latest
+    needs: version
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Resolve Dart dependencies
+        run: flutter pub get
+
+      - name: Build Windows release
+        run: >-
+          flutter build windows --release
+          --build-name=${{ needs.version.outputs.version }}
+          --build-number=${{ needs.version.outputs.build_number }}
+
+      - name: Stage artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Compress-Archive -Path build\windows\x64\runner\Release\* `
+            -DestinationPath "artifacts\deopti-downloader-windows-x64-v${{ needs.version.outputs.version }}.zip" `
+            -CompressionLevel Optimal
+          Get-ChildItem artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: artifacts
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Linux: x64 release bundle (tar.gz).
+  # ---------------------------------------------------------------------------
+  linux:
+    name: Linux (x64)
+    runs-on: ubuntu-latest
+    needs: version
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang cmake ninja-build libgtk-3-dev liblzma-dev
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Resolve Dart dependencies
+        run: flutter pub get
+
+      - name: Build Linux release
+        run: >-
+          flutter build linux --release
+          --build-name=${{ needs.version.outputs.version }}
+          --build-number=${{ needs.version.outputs.build_number }}
+
+      - name: Stage artifact
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          tar -czf "artifacts/deopti-downloader-linux-x64-v${{ needs.version.outputs.version }}.tar.gz" \
+            -C build/linux/x64/release bundle
+          ls -la artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          path: artifacts
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # macOS: release .app (ad-hoc signed) as a zip.
+  # ---------------------------------------------------------------------------
+  macos:
+    name: macOS (Apple Silicon)
+    runs-on: macos-latest
+    needs: version
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Resolve Dart dependencies
+        run: flutter pub get
+
+      - name: Build macOS release
+        run: >-
+          flutter build macos --release
+          --build-name=${{ needs.version.outputs.version }}
+          --build-number=${{ needs.version.outputs.build_number }}
+
+      - name: Stage artifact
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          APP="$(find build/macos/Build/Products/Release -maxdepth 1 -name '*.app' | head -n 1)"
+          if [ -z "$APP" ]; then
+            echo "::error::macOS .app bundle not found"
+            exit 1
+          fi
+          NAME="$(basename "$APP" .app)"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" \
+            "artifacts/deopti-downloader-macos-${NAME}-v${{ needs.version.outputs.version }}.zip"
+          ls -la artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: artifacts
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # iOS: unsigned release .app (built with --no-codesign).
+  # ---------------------------------------------------------------------------
+  ios:
+    name: iOS (unsigned)
+    runs-on: macos-latest
+    needs: version
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # cargokit compiles the Rust core for the iOS targets via Xcode.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: >-
+            aarch64-apple-ios,
+            aarch64-apple-ios-sim,
+            x86_64-apple-ios
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Resolve Dart dependencies
+        run: flutter pub get
+
+      - name: Build iOS release (no codesign)
+        run: >-
+          flutter build ios --release --no-codesign
+          --build-name=${{ needs.version.outputs.version }}
+          --build-number=${{ needs.version.outputs.build_number }}
+
+      - name: Stage artifact
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          if [ ! -d build/ios/iphoneos/Runner.app ]; then
+            echo "::error::Runner.app not found under build/ios/iphoneos"
+            exit 1
+          fi
+          ditto -c -k --sequesterRsrc --keepParent build/ios/iphoneos/Runner.app \
+            "artifacts/deopti-downloader-ios-v${{ needs.version.outputs.version }}-unsigned.zip"
+          ls -la artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-ios
+          path: artifacts
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Web: WASM + Flutter web bundle (zip).
+  # ---------------------------------------------------------------------------
+  web:
+    name: Web (WASM bundle)
+    runs-on: ubuntu-latest
+    needs: version
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # FRB build-web compiles with -Z build-std (nightly + rust-src).
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Install wasm-pack and matching wasm-bindgen-cli (prebuilt)
+        run: |
+          curl -sSL https://github.com/rustwasm/wasm-pack/releases/download/v0.15.0/wasm-pack-v0.15.0-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /tmp
+          sudo cp /tmp/wasm-pack-v0.15.0-x86_64-unknown-linux-musl/wasm-pack /usr/local/bin/
+          curl -sSL https://github.com/rustwasm/wasm-bindgen/releases/download/${{ env.WASM_BINDGEN_VERSION }}/wasm-bindgen-${{ env.WASM_BINDGEN_VERSION }}-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /tmp
+          sudo cp /tmp/wasm-bindgen-${{ env.WASM_BINDGEN_VERSION }}-x86_64-unknown-linux-musl/wasm-bindgen /usr/local/bin/
+          wasm-pack --version
+          wasm-bindgen --version
+
+      - name: Resolve Dart dependencies
+        run: flutter pub get
+
+      - name: Build Rust WASM module (flutter_rust_bridge build-web)
+        run: dart run flutter_rust_bridge build-web --release --dart-root ${{ github.workspace }}
+
+      - name: Build Flutter Web bundle
+        run: flutter build web --release
+
+      - name: Stage artifact
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          (cd build/web && zip -qr "../../artifacts/deopti-downloader-web-v${{ needs.version.outputs.version }}.zip" .)
+          ls -la artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-web
+          path: artifacts
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Docker: build and push the containerized Web deployment to GHCR.
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker image (GHCR)
+    runs-on: ubuntu-latest
+    needs: version
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:v${{ needs.version.outputs.version }}
+            ghcr.io/${{ github.repository }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------------------
+  # Release: download every platform artifact and publish the GitHub Release.
+  #
+  # `docker` is deliberately NOT in `needs`: the container image is a separate
+  # deliverable — a GHCR hiccup must never block publishing the app release.
+  # ---------------------------------------------------------------------------
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: [version, android, windows, linux, macos, ios, web]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history for generated release notes
+
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.release_tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ needs.version.outputs.release_tag }}
+          body: |
+            ## DeOptiDownloader ${{ needs.version.outputs.release_tag }}
+
+            **Fountain-coded QR file transfer over light — Rust core + Flutter.**
+
+            ### Artifacts
+
+            | Platform | File |
+            | --- | --- |
+            | Android (arm64-v8a) | `deopti-downloader-app-arm64-v8a-release-*.apk` |
+            | Android (armeabi-v7a) | `deopti-downloader-app-armeabi-v7a-release-*.apk` |
+            | Android (x86_64) | `deopti-downloader-app-x86_64-release-*.apk` |
+            | Android (App Bundle) | `deopti-downloader-*.aab` |
+            | Windows x64 | `deopti-downloader-windows-x64-*.zip` |
+            | Linux x64 | `deopti-downloader-linux-x64-*.tar.gz` |
+            | macOS | `deopti-downloader-macos-*.zip` |
+            | iOS (unsigned) | `deopti-downloader-ios-*-unsigned.zip` |
+            | Web / WASM | `deopti-downloader-web-*.zip` |
+            | Docker | `ghcr.io/${{ github.repository }}:v${{ needs.version.outputs.version }}` |
+
+            **Android signing**: signed with the release keystore when the
+            `ANDROID_KEYSTORE_BASE64` secrets are configured; otherwise the
+            APKs use the debug key (installable, not store-ready).
+            **iOS**: built with `--no-codesign`; sign and notarize before
+            distribution.
+          generate_release_notes: ${{ github.event_name == 'push' }}
+          prerelease: ${{ needs.version.outputs.prerelease }}
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          files: artifacts/**/*
+          fail_on_unmatched_files: true

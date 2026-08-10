@@ -94,11 +94,31 @@ class AppLocalizationsEn extends AppLocalizations {
   String get framesPerSecond => 'Frame rate';
 
   @override
+  String get symbolRate => 'QR symbol rate';
+
+  @override
+  String get symbolsPerSecond => 'symbols/s';
+
+  @override
+  String get symbolRateHint =>
+      'New QR codes per second, independent of the screen refresh rate. Lower keeps each QR on screen longer so the receiver can lock on more reliably.';
+
+  @override
+  String get dwellPeriods => 'Dwell (repeat)';
+
+  @override
+  String get displayPeriods => 'display periods';
+
+  @override
+  String get dwellHint =>
+      'How many display periods each QR stays on screen. Repeating the same symbol gives a 5–10 fps receiver several stable reads.';
+
+  @override
   String get frameSize => 'Frame size';
 
   @override
   String get frameSizeHint =>
-      'Total bytes per QR frame; larger frames move more data but need a bigger QR.';
+      'Total bytes per QR frame. Auto scores candidate sizes and picks the one with the best estimated throughput; larger frames move more data but need a bigger, denser QR.';
 
   @override
   String get qrSize => 'QR size';

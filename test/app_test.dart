@@ -8,7 +8,9 @@ import 'package:scan_downloader/src/app/app.dart';
 import 'package:scan_downloader/src/app/settings_controller.dart';
 import 'package:scan_downloader/src/app/theme/app_themes.dart';
 import 'package:scan_downloader/src/app/theme/wallpaper.dart';
+import 'package:scan_downloader/src/core/camera/luma_frame.dart';
 import 'package:scan_downloader/src/core/qr/qr_display.dart';
+import 'package:scan_downloader/src/core/transfer/receiver_controller.dart';
 import 'package:scan_downloader/src/core/transfer/sender_controller.dart';
 import 'package:scan_downloader/src/rust/api/transfer.dart';
 import 'package:scan_downloader/src/rust/api/types.dart';
@@ -40,6 +42,89 @@ void main() {
     expect(supported, isA<bool>());
     final max = maxFileBytes();
     expect(max, 64 * 1024 * 1024);
+  });
+
+  test(
+    'Auto frame size and symbol-rate presets are wired through the bridge',
+    () {
+      final presets = symbolRatePresets();
+      expect(presets, [4.0, 8.0, 15.0, 30.0]);
+      expect(defaultSymbolRate(), 8.0);
+      final candidates = frameSizeCandidates();
+      expect(candidates, [800, 1200, 1600, 2000, 2400]);
+
+      // A mid-size payload must pick a mid-range candidate, never the ceiling.
+      final auto = autoFrameSizeFor(payloadLen: 100000);
+      expect(auto, isNotNull);
+      expect(auto!, greaterThanOrEqualTo(800));
+      expect(auto, lessThanOrEqualTo(2400));
+    },
+  );
+
+  test('SenderController symbol rate and dwell are independent of fps', () {
+    final packed = packFileFfi(
+      name: 'tune.txt',
+      mimeType: 'text/plain',
+      bytes: Uint8List.fromList(utf8.encode('symbol rate tuning')),
+    );
+    final session = senderCreate(
+      container: packed.container,
+      frameBytes: 1000,
+      sessionId: 0x60f1,
+    );
+    final controller =
+        SenderController(
+            session: session,
+            info: senderInfo(session: session),
+          )
+          ..setFps(60)
+          ..setSymbolRate(8)
+          ..setDwellPeriods(1);
+    // 60 fps / 8 symbols/s = 7.5 -> at least 8 display periods per symbol.
+    expect(controller.ticksPerSymbol, 8);
+
+    // Dwell (repeat) raises the hold but never below one display period.
+    controller.setDwellPeriods(3);
+    expect(controller.ticksPerSymbol, 8); // max(3, 8)
+    controller.setSymbolRate(30);
+    expect(controller.ticksPerSymbol, 3); // max(3, 2)
+    controller.setDwellPeriods(1);
+    controller.setSymbolRate(30);
+    expect(controller.ticksPerSymbol, 2); // max(1, 2)
+
+    // The chosen rate must never produce an empty hold.
+    controller.setFps(120);
+    controller.setSymbolRate(120);
+    controller.setDwellPeriods(1);
+    expect(controller.ticksPerSymbol, 1);
+    controller.dispose();
+  });
+
+  test('LatestFrameSlot keeps only the newest frame (never queues)', () {
+    final slot = LatestFrameSlot();
+    expect(slot.hasPending, isFalse);
+    final early = LumaFrame(
+      data: Uint8List(4),
+      width: 1,
+      height: 1,
+      format: LumaFormat.gray,
+      timestamp: DateTime(2026, 1, 1),
+    );
+    final late = LumaFrame(
+      data: Uint8List(4),
+      width: 1,
+      height: 1,
+      format: LumaFormat.gray,
+      timestamp: DateTime(2026, 1, 2),
+    );
+    slot.put(early);
+    slot.put(late); // overwrites the pending one
+    expect(slot.hasPending, isTrue);
+    expect(identical(slot.take(), late), isTrue);
+    expect(slot.hasPending, isFalse);
+    expect(slot.take(), isNull);
+    slot.clear();
+    expect(slot.hasPending, isFalse);
   });
 
   testWidgets('QR display reserves the ISO four-module quiet zone', (

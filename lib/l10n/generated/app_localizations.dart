@@ -260,6 +260,42 @@ abstract class AppLocalizations {
   /// **'Frame rate'**
   String get framesPerSecond;
 
+  /// No description provided for @symbolRate.
+  ///
+  /// In en, this message translates to:
+  /// **'QR symbol rate'**
+  String get symbolRate;
+
+  /// No description provided for @symbolsPerSecond.
+  ///
+  /// In en, this message translates to:
+  /// **'symbols/s'**
+  String get symbolsPerSecond;
+
+  /// No description provided for @symbolRateHint.
+  ///
+  /// In en, this message translates to:
+  /// **'New QR codes per second, independent of the screen refresh rate. Lower keeps each QR on screen longer so the receiver can lock on more reliably.'**
+  String get symbolRateHint;
+
+  /// No description provided for @dwellPeriods.
+  ///
+  /// In en, this message translates to:
+  /// **'Dwell (repeat)'**
+  String get dwellPeriods;
+
+  /// No description provided for @displayPeriods.
+  ///
+  /// In en, this message translates to:
+  /// **'display periods'**
+  String get displayPeriods;
+
+  /// No description provided for @dwellHint.
+  ///
+  /// In en, this message translates to:
+  /// **'How many display periods each QR stays on screen. Repeating the same symbol gives a 5–10 fps receiver several stable reads.'**
+  String get dwellHint;
+
   /// No description provided for @frameSize.
   ///
   /// In en, this message translates to:
@@ -269,7 +305,7 @@ abstract class AppLocalizations {
   /// No description provided for @frameSizeHint.
   ///
   /// In en, this message translates to:
-  /// **'Total bytes per QR frame; larger frames move more data but need a bigger QR.'**
+  /// **'Total bytes per QR frame. Auto scores candidate sizes and picks the one with the best estimated throughput; larger frames move more data but need a bigger, denser QR.'**
   String get frameSizeHint;
 
   /// No description provided for @qrSize.

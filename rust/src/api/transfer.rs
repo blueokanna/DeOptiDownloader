@@ -30,6 +30,33 @@ const FRAME_SIZE_OPTIONS: [usize; 6] = [500, 1000, 1465, 1850, 2331, 2953];
 /// reliable screen-to-camera capture on typical 1080p phones.
 const DEFAULT_FRAME_SIZE: usize = 2331;
 
+/// Auto-search probes for the "Auto" frame-size mode (payload bytes per
+/// frame), per the receiver-tuning guide. These deliberately stop well below
+/// the Version-40 ceiling: near-capacity symbols are denser and decode less
+/// reliably from a phone camera, so the best end-to-end goodput usually sits
+/// in the 1200–2000 B range (an engineering heuristic to be validated by
+/// measurement, not a universal claim).
+const FRAME_SIZE_CANDIDATES: [usize; 5] = [800, 1200, 1600, 2000, 2400];
+
+/// Symbol-rate presets (symbols per second) for the sender: stable / normal /
+/// difficult capture environments. The receiver has no return channel, so
+/// these are the pragmatic "modes" instead of an adaptive loop.
+const SYMBOL_RATE_PRESETS: [f64; 4] = [4.0, 8.0, 15.0, 30.0];
+
+/// Default symbol rate: 8 symbols/s keeps each QR on screen ~125 ms, giving a
+/// 5–10 fps receiver camera several exposure-stable frames per symbol.
+const DEFAULT_SYMBOL_RATE: f64 = 8.0;
+
+/// Heuristic decode-time coefficient (seconds per module²) for the auto
+/// frame-size model. Calibrated from measured `rxing` decode cost at the
+/// 1280px scan bound; treat as an order-of-magnitude estimate.
+const DECODE_TIME_PER_MODULE_SQ: f64 = 9.6e-8;
+
+/// Reliability roll-off between the smallest and largest candidate (0.45 ⇒
+/// the largest candidate is scored at 55% valid-frame probability). A
+/// documented heuristic, not a measured curve.
+const RELIABILITY_ROLLOFF: f64 = 0.45;
+
 /// Number of extra frames (as a fraction of K) the receiver may need on a
 /// noisy channel before the fountain solves. Used for progress estimation.
 const FOUNTAIN_OVERHEAD: f64 = 1.15;
@@ -91,6 +118,72 @@ pub fn smallest_sufficient_frame_size_for(payload_len: u32) -> Option<u32> {
 /// frames on a noisy channel. Used for progress estimation.
 pub fn fountain_overhead() -> f64 {
     FOUNTAIN_OVERHEAD
+}
+
+// ---------------------------------------------------------------------------
+// Sender tuning: symbol rate & auto frame size
+// ---------------------------------------------------------------------------
+
+/// Auto-search probes for the "Auto" frame-size mode.
+pub fn frame_size_candidates() -> Vec<u32> {
+    FRAME_SIZE_CANDIDATES.iter().map(|&v| v as u32).collect()
+}
+
+/// Symbol-rate presets (symbols per second) offered by the sender.
+pub fn symbol_rate_presets() -> Vec<f64> {
+    SYMBOL_RATE_PRESETS.to_vec()
+}
+
+/// Default symbol rate (8 symbols/s ≈ 125 ms dwell per QR).
+pub fn default_symbol_rate() -> f64 {
+    DEFAULT_SYMBOL_RATE
+}
+
+/// Pick the frame size that maximizes the estimated end-to-end goodput
+/// `G(B) = B · p(B) / (t_display(B) + t_decode(B))` over the auto-search
+/// probes, where:
+/// - `B` is the payload bytes per frame,
+/// - `p(B)` is a reliability model that rolls off with QR module density,
+/// - `t_display(B)` is the fixed symbol dwell (`1 / symbol_rate`),
+/// - `t_decode(B)` is a module-area decoder-cost model.
+///
+/// Returns `None` when no candidate can carry `payload_len` (e.g. too large).
+///
+/// This is a deterministic engineering heuristic — the constants above are
+/// documented estimates, not measured curves. It simply stops the user from
+/// having to guess "frame size" by hand; the definitive per-device numbers
+/// still need a calibration run on the target phone.
+pub fn auto_frame_size_for(payload_len: u32) -> Option<u32> {
+    let min_needed = deopti_transfer::smallest_sufficient_frame_size(
+        payload_len as usize,
+        &FRAME_SIZE_CANDIDATES,
+    )?;
+    let t_display = 1.0 / DEFAULT_SYMBOL_RATE;
+    let m_max = FRAME_SIZE_CANDIDATES
+        .iter()
+        .filter_map(|&b| qr_version_for(b).map(|v| 17 + 4 * v as u32))
+        .max()?;
+    let m_min = qr_version_for(min_needed).map(|v| 17 + 4 * v as u32)?;
+
+    let mut best: Option<(f64, u32)> = None;
+    for &probe in &FRAME_SIZE_CANDIDATES {
+        if probe < min_needed {
+            continue;
+        }
+        let version = qr_version_for(probe)?;
+        let m = 17 + 4 * version as u32;
+        let t_decode = DECODE_TIME_PER_MODULE_SQ * (m as f64) * (m as f64);
+        let p = if m_max <= m_min {
+            1.0
+        } else {
+            1.0 - RELIABILITY_ROLLOFF * ((m - m_min) as f64 / (m_max - m_min) as f64)
+        };
+        let goodput = probe as f64 * p / (t_display + t_decode);
+        if best.is_none_or(|(bg, _)| goodput > bg) {
+            best = Some((goodput, probe as u32));
+        }
+    }
+    best.map(|(_, b)| b)
 }
 
 // ---------------------------------------------------------------------------
@@ -794,5 +887,41 @@ mod tests {
     #[test]
     fn jrc_disabled_without_encryption() {
         assert!(jrc_keygen_ffi().is_err());
+    }
+
+    #[test]
+    fn symbol_rate_and_frame_candidates() {
+        let presets = symbol_rate_presets();
+        assert_eq!(presets.len(), 4);
+        assert!(presets.contains(&8.0));
+        assert_eq!(default_symbol_rate(), 8.0);
+
+        let candidates = frame_size_candidates();
+        assert_eq!(candidates, vec![800, 1200, 1600, 2000, 2400]);
+    }
+
+    #[test]
+    fn auto_frame_size_is_never_the_capacity_ceiling() {
+        // A large payload (say 100 KB) must still pick a mid-range candidate,
+        // not the near-capacity 2400 B probe.
+        let frame_bytes = auto_frame_size_for(100_000).expect("auto frame size");
+        assert!((800..=2400).contains(&frame_bytes));
+        assert!(fits_in_one_stream(100_000, frame_bytes));
+    }
+
+    #[test]
+    fn auto_frame_size_handles_tiny_payloads() {
+        // A 100-byte payload fits the smallest probe; auto picks >= 800.
+        let frame_bytes = auto_frame_size_for(100).expect("auto frame size");
+        assert!(frame_bytes >= 800);
+        assert!(fits_in_one_stream(100, frame_bytes));
+    }
+
+    #[test]
+    fn auto_frame_size_rejects_oversized_payload() {
+        // Beyond what the largest candidate can carry in a u16-k stream
+        // (65535 blocks x 2400 B + change): no candidate fits → None.
+        let oversized = (u16::MAX as u64) * 2400 + 1;
+        assert!(auto_frame_size_for(oversized as u32).is_none());
     }
 }

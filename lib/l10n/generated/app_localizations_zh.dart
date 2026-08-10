@@ -90,10 +90,30 @@ class AppLocalizationsZh extends AppLocalizations {
   String get framesPerSecond => '帧率';
 
   @override
+  String get symbolRate => '二维码符号率';
+
+  @override
+  String get symbolsPerSecond => '符号/秒';
+
+  @override
+  String get symbolRateHint =>
+      '每秒产生的新二维码数，与屏幕刷新率相互独立。数值越低，每个二维码在屏幕上停留越久，接收端越容易锁定。';
+
+  @override
+  String get dwellPeriods => '驻留（重复）';
+
+  @override
+  String get displayPeriods => '显示周期';
+
+  @override
+  String get dwellHint => '每个二维码在屏幕上保持的显示周期数。重复同一符号可让 5–10 帧/秒的接收摄像头获得多次稳定读取。';
+
+  @override
   String get frameSize => '帧大小';
 
   @override
-  String get frameSizeHint => '每个二维码帧的总字节数；帧越大传输越快，但二维码也越大。';
+  String get frameSizeHint =>
+      '每个二维码帧的总字节数。自动模式会评估候选尺寸并选择预估吞吐最优者；帧越大传输越快，但二维码更大更密。';
 
   @override
   String get qrSize => '二维码尺寸';

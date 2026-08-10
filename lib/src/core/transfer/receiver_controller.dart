@@ -6,14 +6,60 @@ import '../../rust/api/qr.dart' as qr;
 import '../../rust/api/transfer.dart';
 import '../../rust/api/types.dart';
 import '../camera/camera_frame_source.dart';
+import '../camera/camera_image_luma.dart';
 import '../camera/luma_frame.dart';
 
-/// Receive-side orchestration: camera frames → Rust QR decode → fountain
-/// receiver → DCF3 unpack, plus progress / no-signal state for the UI.
+/// A single-slot "latest wins" frame holder.
 ///
-/// Frames are decoded one at a time; while a decode is in flight, further
-/// camera frames are dropped (the fountain absorbs the loss). The receiver
-/// re-locks automatically when the sender restarts (handled in Rust).
+/// The camera listener only ever writes here (never decodes); the decode
+/// worker takes the most recent frame when it is idle. A frame that arrives
+/// while the worker is busy replaces the pending one — nothing ever queues,
+/// so memory stays bounded and stale frames are dropped instead of copied.
+class LatestFrameSlot {
+  LumaFrame? _pending;
+
+  bool get hasPending => _pending != null;
+
+  /// Takes the latest frame, if any.
+  LumaFrame? take() {
+    final frame = _pending;
+    _pending = null;
+    return frame;
+  }
+
+  /// Stores the latest frame, replacing any older pending one.
+  void put(LumaFrame frame) {
+    _pending = frame;
+  }
+
+  void clear() {
+    _pending = null;
+  }
+}
+
+/// Receive-side orchestration: camera frames → Rust QR decode (ROI-tracked) →
+/// protocol admission → fountain receiver → DCF3 unpack, plus progress /
+/// no-signal state for the UI.
+///
+/// Pipeline (each stage is decoupled, per the receiver architecture guide):
+/// ```
+/// Camera listener ──put──▶ LatestFrameSlot (cap. 1, never queues)
+///                                │ take (latest only)
+///                                ▼
+///                     QR worker: SIMD scan + ROI tracker + decode
+///                                │ bytes
+///                                ▼
+///                     Protocol admission: magic/length → fountain | manifest
+///                                │
+///                                ▼
+///                     Fountain receiver (incremental peel, sub-ms)
+///                                │
+///                                ▼
+///                     UI telemetry (throttled) / file assembly
+/// ```
+/// The camera thread never decodes; the QR decode runs on an FRB worker; the
+/// fountain peel is incremental and cheap; the UI is only notified at a
+/// bounded rate unless the transfer completes or fails.
 class ReceiverController extends ChangeNotifier {
   ReceiverController({required this.session});
 
@@ -36,12 +82,24 @@ class ReceiverController extends ChangeNotifier {
   StreamSubscription<LumaFrame>? _sub;
   Timer? _signalTimer;
 
+  final LatestFrameSlot _slot = LatestFrameSlot();
+  QrTrackerState _tracker = QrTrackerState();
   bool _decoding = false;
   bool _disposed = false;
-  int _generation = 0;
   DateTime _lastDecodeAt = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _startedAt = DateTime.now();
   DateTime? _lastSignalAt;
+  DateTime _lastUiNotify = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Minimum wall-clock gap between two decode attempts. Camera frames can
+  /// arrive at 30 fps but the receiver analysis target is ~12–20 fps: each
+  /// symbol stays on screen ~125 ms, so decoding 20×/s already yields 2–3
+  /// exposure-stable reads per symbol. The slot absorbs the excess frames.
+  static const Duration kMinDecodeInterval = Duration(milliseconds: 50);
+
+  /// UI notification budget: progress refreshes at ~5 Hz; terminal events
+  /// (complete / error / auth prompt) always notify immediately.
+  static const Duration kUiNotifyBudget = Duration(milliseconds: 200);
 
   int decodedFrames = 0;
   int acceptedFrames = 0;
@@ -95,93 +153,154 @@ class ReceiverController extends ChangeNotifier {
       rethrow;
     }
     _sub = camera.frames.listen(
-      _onFrame,
+      // Camera thread: write-only to the slot, never decode.
+      _slot.put,
       onError: (Object value, StackTrace stackTrace) {
         error = value.toString();
-        notifyListeners();
+        _maybeNotify(force: true);
       },
     );
+    unawaited(_pump());
     _signalTimer?.cancel();
     _signalTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!hasSignal && completed == null) {
-        notifyListeners();
+        _maybeNotify(force: true);
       }
     });
-    notifyListeners();
+    _maybeNotify(force: true);
   }
 
-  Future<void> _onFrame(LumaFrame frame) async {
-    // Frames are decimated to <=1280px and decoded coarse-to-fine, so the
-    // analysis loop can run up to ~30 fps; slow decodes apply natural
-    // backpressure because only one Rust worker request may be active.
-    if (_decoding) {
-      return;
+  /// Decode worker: takes the latest frame, decodes it (Rust worker thread,
+  /// ROI-tracked), admits the payload and folds it into the fountain.
+  Future<void> _pump() async {
+    while (!_disposed) {
+      if (_decoding) {
+        await Future<void>.delayed(const Duration(milliseconds: 2));
+        continue;
+      }
+      // Honor the decode budget without dropping frames: wait for the
+      // interval to elapse before taking the latest frame.
+      final since = DateTime.now().difference(_lastDecodeAt);
+      if (since < kMinDecodeInterval) {
+        await Future<void>.delayed(kMinDecodeInterval - since);
+        continue;
+      }
+      final frame = _slot.take();
+      if (frame == null) {
+        await Future<void>.delayed(const Duration(milliseconds: 2));
+        continue;
+      }
+      await _processFrame(frame);
     }
-    final interval = const Duration(milliseconds: 33);
-    if (frame.timestamp.difference(_lastDecodeAt) < interval) {
-      return;
-    }
-    final subscription = _sub;
-    final generation = _generation;
-    subscription?.pause();
+  }
+
+  Future<void> _processFrame(LumaFrame frame) async {
     _decoding = true;
     _lastDecodeAt = frame.timestamp;
     try {
-      final Uint8List? bytes;
-      if (frame.rgba) {
-        bytes = await qr.qrDecodeRgba(
-          rgba: frame.data,
-          width: frame.width,
-          height: frame.height,
-        );
-      } else {
-        bytes = await qr.qrDecodeGray(
-          gray: frame.data,
-          width: frame.width,
-          height: frame.height,
-        );
-      }
-      if (_disposed || generation != _generation) {
+      final result = await _decodeTracked(frame);
+      if (_disposed) {
         return;
       }
+      _tracker = result.tracker;
+      final bytes = result.bytes;
       if (bytes == null) {
-        return;
+        return; // no QR in this frame — erasure for the fountain
       }
       decodedFrames++;
-      // A session manifest (the sender's setup QR) previews the transfer but
-      // is not a fountain frame — surface it and skip the receiver.
-      final m = decodeManifestFfi(bytes: bytes);
-      if (m != null) {
-        manifest = m;
-        notifyListeners();
-        return;
+      // Protocol admission runs before the fountain: fountain frames carry
+      // the "D1 0F" magic, anything else is probed as a session manifest.
+      // This gate also spares the fountain worker for garbage payloads.
+      if (_isFountainFrame(bytes)) {
+        await _pushFountain(bytes);
+      } else {
+        final m = decodeManifestFfi(bytes: bytes);
+        if (m != null) {
+          manifest = m;
+          _lastSignalAt ??= DateTime.now();
+          _maybeNotify(force: true);
+        }
       }
-      final result = receiverPush(session: session, frameBytes: bytes);
-      outcome = result;
-      if (result.status == PushStatus.accepted) {
-        acceptedFrames++;
-        _lastSignalAt = DateTime.now();
-        _updateFps();
-      }
-      if (result.status == PushStatus.complete && result.container != null) {
-        acceptedFrames++;
-        _lastSignalAt = DateTime.now();
-        await _handleContainer(result.container!);
-      }
-      notifyListeners();
     } catch (e) {
-      if (_disposed || generation != _generation) {
+      if (_disposed) {
         return;
       }
       error = e.toString();
-      notifyListeners();
+      _maybeNotify(force: true);
     } finally {
-      if (generation == _generation) {
-        _decoding = false;
-        if (!_disposed && identical(_sub, subscription)) {
-          subscription?.resume();
+      _decoding = false;
+    }
+  }
+
+  /// Routes the frame to the matching Rust decode entry point (SIMD scan
+  /// conversion + ROI tracking happen inside the worker).
+  Future<QrDecodeResult> _decodeTracked(LumaFrame f) {
+    switch (f.format) {
+      case LumaFormat.yplane:
+        return qr.qrDecodeYplaneTracked(
+          yPlane: f.data,
+          width: f.width,
+          height: f.height,
+          rowStride: f.rowStride,
+          pixelStride: f.pixelStride,
+          maxScanDim: kMaxLumaSide,
+          tracker: _tracker,
+        );
+      case LumaFormat.bgra:
+        return qr.qrDecodeBgraTracked(
+          bgra: f.data,
+          width: f.width,
+          height: f.height,
+          rowStride: f.rowStride,
+          maxScanDim: kMaxLumaSide,
+          tracker: _tracker,
+        );
+      case LumaFormat.gray:
+        return qr.qrDecodeGrayTracked(
+          gray: f.data,
+          width: f.width,
+          height: f.height,
+          maxScanDim: kMaxLumaSide,
+          tracker: _tracker,
+        );
+      case LumaFormat.rgba:
+        return qr.qrDecodeRgbaTracked(
+          rgba: f.data,
+          width: f.width,
+          height: f.height,
+          maxScanDim: kMaxLumaSide,
+          tracker: _tracker,
+        );
+    }
+  }
+
+  /// Cheap admission gate: a protocol-v3 fountain frame starts with the
+  /// "D1 0F" magic and is at least header + 1 payload byte long. Full
+  /// integrity (frame tag, stream identity, dedup) is verified by the Rust
+  /// receiver; this only avoids FFI crossings for obviously wrong payloads.
+  static bool _isFountainFrame(Uint8List bytes) =>
+      bytes.length > 25 && bytes[0] == 0xD1 && bytes[1] == 0x0F;
+
+  Future<void> _pushFountain(Uint8List bytes) async {
+    final result = receiverPush(session: session, frameBytes: bytes);
+    outcome = result;
+    switch (result.status) {
+      case PushStatus.accepted:
+        acceptedFrames++;
+        _lastSignalAt = DateTime.now();
+        _updateFps();
+        _maybeNotify();
+      case PushStatus.complete:
+        if (result.container != null) {
+          acceptedFrames++;
+          _lastSignalAt = DateTime.now();
+          await _handleContainer(result.container!);
+          _maybeNotify(force: true);
         }
-      }
+      case PushStatus.ignored:
+        // Damaged / duplicate frame, or the transfer already completed — the
+        // fountain absorbs it as an erasure. No error, no notification.
+        break;
     }
   }
 
@@ -196,7 +315,7 @@ class ReceiverController extends ChangeNotifier {
       if (_isJrcEnvelope(container)) {
         jrcRequired = true;
         _pendingContainer = container;
-        notifyListeners();
+        _maybeNotify(force: true);
         return;
       }
       final file = unpackFileFfi(container: container);
@@ -238,7 +357,7 @@ class ReceiverController extends ChangeNotifier {
       _signalTimer?.cancel();
       passwordRequired = false;
       _pendingContainer = null;
-      notifyListeners();
+      _maybeNotify(force: true);
       return true;
     } catch (_) {
       return false;
@@ -259,7 +378,7 @@ class ReceiverController extends ChangeNotifier {
       _signalTimer?.cancel();
       jrcRequired = false;
       _pendingContainer = null;
-      notifyListeners();
+      _maybeNotify(force: true);
       return true;
     } catch (_) {
       return false;
@@ -273,10 +392,22 @@ class ReceiverController extends ChangeNotifier {
         : decodedFrames / (window.inMilliseconds / 1000);
   }
 
+  /// Notifies the UI at a bounded rate; [force] bypasses the budget for
+  /// terminal events so completion/errors/auth prompts appear immediately.
+  void _maybeNotify({bool force = false}) {
+    final now = DateTime.now();
+    if (!force && now.difference(_lastUiNotify) < kUiNotifyBudget) {
+      return;
+    }
+    _lastUiNotify = now;
+    notifyListeners();
+  }
+
   /// Stops the camera and resets receiver state for another transfer.
   Future<void> reset() async {
-    _generation++;
     _decoding = false;
+    _slot.clear();
+    _tracker = QrTrackerState();
     await _sub?.cancel();
     _sub = null;
     _signalTimer?.cancel();
@@ -304,13 +435,12 @@ class ReceiverController extends ChangeNotifier {
     _pendingContainer = null;
     _startedAt = DateTime.now();
     _lastSignalAt = null;
-    notifyListeners();
+    _maybeNotify(force: true);
   }
 
   @override
   void dispose() {
     _disposed = true;
-    _generation++;
     _sub?.cancel();
     _sub = null;
     _signalTimer?.cancel();

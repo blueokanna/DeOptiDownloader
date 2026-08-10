@@ -69,7 +69,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 315058232;
+  int get rustContentHash => -764418959;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -81,11 +81,15 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
+  int? crateApiTransferAutoFrameSizeFor({required int payloadLen});
+
   ManifestPayload? crateApiManifestDecodeManifest({required List<int> bytes});
 
   ManifestInfo? crateApiTransferDecodeManifestFfi({required List<int> bytes});
 
   int crateApiTransferDefaultFrameSize();
+
+  double crateApiTransferDefaultSymbolRate();
 
   Uint8List crateApiManifestEncodeManifest({required ManifestPayload payload});
 
@@ -97,6 +101,8 @@ abstract class RustLibApi extends BaseApi {
   });
 
   double crateApiTransferFountainOverhead();
+
+  Uint32List crateApiTransferFrameSizeCandidates();
 
   Uint32List crateApiTransferFrameSizeOptions();
 
@@ -128,11 +134,28 @@ abstract class RustLibApi extends BaseApi {
     required List<int> judgePublicKey,
   });
 
+  Future<QrDecodeResult> crateApiQrQrDecodeBgraTracked({
+    required List<int> bgra,
+    required int width,
+    required int height,
+    required int rowStride,
+    int? maxScanDim,
+    required QrTrackerState tracker,
+  });
+
   Future<Uint8List?> crateApiQrQrDecodeGray({
     required List<int> gray,
     required int width,
     required int height,
     int? maxScanDim,
+  });
+
+  Future<QrDecodeResult> crateApiQrQrDecodeGrayTracked({
+    required List<int> gray,
+    required int width,
+    required int height,
+    int? maxScanDim,
+    required QrTrackerState tracker,
   });
 
   Future<Uint8List?> crateApiQrQrDecodeRgba({
@@ -142,7 +165,29 @@ abstract class RustLibApi extends BaseApi {
     int? maxScanDim,
   });
 
+  Future<QrDecodeResult> crateApiQrQrDecodeRgbaTracked({
+    required List<int> rgba,
+    required int width,
+    required int height,
+    int? maxScanDim,
+    required QrTrackerState tracker,
+  });
+
+  Future<QrDecodeResult> crateApiQrQrDecodeYplaneTracked({
+    required List<int> yPlane,
+    required int width,
+    required int height,
+    required int rowStride,
+    required int pixelStride,
+    int? maxScanDim,
+    required QrTrackerState tracker,
+  });
+
   QrMatrix crateApiQrQrEncode({required List<int> data});
+
+  QrTrackerState crateApiTypesQrTrackerStateDefault();
+
+  QrTrackerState crateApiTypesQrTrackerStateNew();
 
   int? crateApiQrQrVersionFor({required BigInt frameBytes});
 
@@ -188,6 +233,8 @@ abstract class RustLibApi extends BaseApi {
     required int frameBytes,
   });
 
+  Float64List crateApiTransferSymbolRatePresets();
+
   OpticalFileData crateApiTransferUnpackFileFfi({required List<int> container});
 
   OpticalFileData crateApiTransferUnpackFileJrcFfi({
@@ -228,13 +275,39 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
+  int? crateApiTransferAutoFrameSizeFor({required int payloadLen}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(payloadLen, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 1)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_box_autoadd_u_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTransferAutoFrameSizeForConstMeta,
+        argValues: [payloadLen],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTransferAutoFrameSizeForConstMeta =>
+      const TaskConstMeta(
+        debugName: "auto_frame_size_for",
+        argNames: ["payloadLen"],
+      );
+
+  @override
   ManifestPayload? crateApiManifestDecodeManifest({required List<int> bytes}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_8_loose(bytes, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 1)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_box_autoadd_manifest_payload,
@@ -257,7 +330,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_8_loose(bytes, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_box_autoadd_manifest_info,
@@ -282,7 +355,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_u_32,
@@ -299,13 +372,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "default_frame_size", argNames: []);
 
   @override
+  double crateApiTransferDefaultSymbolRate() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_f_64,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTransferDefaultSymbolRateConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTransferDefaultSymbolRateConstMeta =>
+      const TaskConstMeta(debugName: "default_symbol_rate", argNames: []);
+
+  @override
   Uint8List crateApiManifestEncodeManifest({required ManifestPayload payload}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_box_autoadd_manifest_payload(payload, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_u_8_strict,
@@ -327,7 +422,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -354,7 +449,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_32(payloadLen, serializer);
           sse_encode_u_32(frameBytes, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -379,7 +474,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_f_64,
@@ -396,12 +491,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "fountain_overhead", argNames: []);
 
   @override
+  Uint32List crateApiTransferFrameSizeCandidates() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_32_strict,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTransferFrameSizeCandidatesConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTransferFrameSizeCandidatesConstMeta =>
+      const TaskConstMeta(debugName: "frame_size_candidates", argNames: []);
+
+  @override
   Uint32List crateApiTransferFrameSizeOptions() {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_u_32_strict,
@@ -423,7 +540,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -445,7 +562,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_judge_key_pair_data,
@@ -467,7 +584,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -489,7 +606,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_u_32,
@@ -520,7 +637,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(mimeType, serializer);
           sse_encode_list_prim_u_8_loose(bytes, serializer);
           sse_encode_String(password, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_packed_file_data,
@@ -552,7 +669,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(name, serializer);
           sse_encode_String(mimeType, serializer);
           sse_encode_list_prim_u_8_loose(bytes, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 17)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_packed_file_data,
@@ -586,7 +703,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(mimeType, serializer);
           sse_encode_list_prim_u_8_loose(bytes, serializer);
           sse_encode_list_prim_u_8_loose(judgePublicKey, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_jrc_packed_data,
@@ -603,6 +720,56 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(
         debugName: "pack_file_jrc_ffi",
         argNames: ["name", "mimeType", "bytes", "judgePublicKey"],
+      );
+
+  @override
+  Future<QrDecodeResult> crateApiQrQrDecodeBgraTracked({
+    required List<int> bgra,
+    required int width,
+    required int height,
+    required int rowStride,
+    int? maxScanDim,
+    required QrTrackerState tracker,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(bgra, serializer);
+          sse_encode_u_32(width, serializer);
+          sse_encode_u_32(height, serializer);
+          sse_encode_u_32(rowStride, serializer);
+          sse_encode_opt_box_autoadd_u_32(maxScanDim, serializer);
+          sse_encode_box_autoadd_qr_tracker_state(tracker, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 19,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_qr_decode_result,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiQrQrDecodeBgraTrackedConstMeta,
+        argValues: [bgra, width, height, rowStride, maxScanDim, tracker],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiQrQrDecodeBgraTrackedConstMeta =>
+      const TaskConstMeta(
+        debugName: "qr_decode_bgra_tracked",
+        argNames: [
+          "bgra",
+          "width",
+          "height",
+          "rowStride",
+          "maxScanDim",
+          "tracker",
+        ],
       );
 
   @override
@@ -623,7 +790,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 20,
             port: port_,
           );
         },
@@ -644,6 +811,47 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
+  Future<QrDecodeResult> crateApiQrQrDecodeGrayTracked({
+    required List<int> gray,
+    required int width,
+    required int height,
+    int? maxScanDim,
+    required QrTrackerState tracker,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(gray, serializer);
+          sse_encode_u_32(width, serializer);
+          sse_encode_u_32(height, serializer);
+          sse_encode_opt_box_autoadd_u_32(maxScanDim, serializer);
+          sse_encode_box_autoadd_qr_tracker_state(tracker, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 21,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_qr_decode_result,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiQrQrDecodeGrayTrackedConstMeta,
+        argValues: [gray, width, height, maxScanDim, tracker],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiQrQrDecodeGrayTrackedConstMeta =>
+      const TaskConstMeta(
+        debugName: "qr_decode_gray_tracked",
+        argNames: ["gray", "width", "height", "maxScanDim", "tracker"],
+      );
+
+  @override
   Future<Uint8List?> crateApiQrQrDecodeRgba({
     required List<int> rgba,
     required int width,
@@ -661,7 +869,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 22,
             port: port_,
           );
         },
@@ -682,13 +890,115 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
+  Future<QrDecodeResult> crateApiQrQrDecodeRgbaTracked({
+    required List<int> rgba,
+    required int width,
+    required int height,
+    int? maxScanDim,
+    required QrTrackerState tracker,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(rgba, serializer);
+          sse_encode_u_32(width, serializer);
+          sse_encode_u_32(height, serializer);
+          sse_encode_opt_box_autoadd_u_32(maxScanDim, serializer);
+          sse_encode_box_autoadd_qr_tracker_state(tracker, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 23,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_qr_decode_result,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiQrQrDecodeRgbaTrackedConstMeta,
+        argValues: [rgba, width, height, maxScanDim, tracker],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiQrQrDecodeRgbaTrackedConstMeta =>
+      const TaskConstMeta(
+        debugName: "qr_decode_rgba_tracked",
+        argNames: ["rgba", "width", "height", "maxScanDim", "tracker"],
+      );
+
+  @override
+  Future<QrDecodeResult> crateApiQrQrDecodeYplaneTracked({
+    required List<int> yPlane,
+    required int width,
+    required int height,
+    required int rowStride,
+    required int pixelStride,
+    int? maxScanDim,
+    required QrTrackerState tracker,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(yPlane, serializer);
+          sse_encode_u_32(width, serializer);
+          sse_encode_u_32(height, serializer);
+          sse_encode_u_32(rowStride, serializer);
+          sse_encode_u_32(pixelStride, serializer);
+          sse_encode_opt_box_autoadd_u_32(maxScanDim, serializer);
+          sse_encode_box_autoadd_qr_tracker_state(tracker, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 24,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_qr_decode_result,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiQrQrDecodeYplaneTrackedConstMeta,
+        argValues: [
+          yPlane,
+          width,
+          height,
+          rowStride,
+          pixelStride,
+          maxScanDim,
+          tracker,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiQrQrDecodeYplaneTrackedConstMeta =>
+      const TaskConstMeta(
+        debugName: "qr_decode_yplane_tracked",
+        argNames: [
+          "yPlane",
+          "width",
+          "height",
+          "rowStride",
+          "pixelStride",
+          "maxScanDim",
+          "tracker",
+        ],
+      );
+
+  @override
   QrMatrix crateApiQrQrEncode({required List<int> data}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_8_loose(data, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_qr_matrix,
@@ -705,13 +1015,57 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "qr_encode", argNames: ["data"]);
 
   @override
+  QrTrackerState crateApiTypesQrTrackerStateDefault() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_qr_tracker_state,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTypesQrTrackerStateDefaultConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTypesQrTrackerStateDefaultConstMeta =>
+      const TaskConstMeta(debugName: "qr_tracker_state_default", argNames: []);
+
+  @override
+  QrTrackerState crateApiTypesQrTrackerStateNew() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_qr_tracker_state,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTypesQrTrackerStateNewConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTypesQrTrackerStateNewConstMeta =>
+      const TaskConstMeta(debugName: "qr_tracker_state_new", argNames: []);
+
+  @override
   int? crateApiQrQrVersionFor({required BigInt frameBytes}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_usize(frameBytes, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_box_autoadd_u_8,
@@ -735,7 +1089,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29)!;
         },
         codec: SseCodec(
           decodeSuccessData:
@@ -766,7 +1120,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_list_prim_u_8_loose(frameBytes, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 21)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_receiver_outcome,
@@ -797,7 +1151,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             session,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 22)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_receiver_outcome,
@@ -819,7 +1173,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
@@ -848,7 +1202,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_list_prim_u_8_loose(container, serializer);
           sse_encode_u_32(frameBytes, serializer);
           sse_encode_opt_box_autoadd_u_16(sessionId, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
         },
         codec: SseCodec(
           decodeSuccessData:
@@ -878,7 +1232,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             session,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_sender_info,
@@ -904,7 +1258,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             session,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_sender_frame,
@@ -935,7 +1289,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 27,
+            funcId: 36,
             port: port_,
           );
         },
@@ -965,7 +1319,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             session,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 37)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_u_8_strict,
@@ -994,7 +1348,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             session,
             serializer,
           );
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_qr_matrix,
@@ -1022,7 +1376,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_32(payloadLen, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 39)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_box_autoadd_u_32,
@@ -1052,7 +1406,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_32(payloadLen, serializer);
           sse_encode_u_32(frameBytes, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 40)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_box_autoadd_u_32,
@@ -1072,6 +1426,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Float64List crateApiTransferSymbolRatePresets() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 41)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_f_64_strict,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTransferSymbolRatePresetsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTransferSymbolRatePresetsConstMeta =>
+      const TaskConstMeta(debugName: "symbol_rate_presets", argNames: []);
+
+  @override
   OpticalFileData crateApiTransferUnpackFileFfi({
     required List<int> container,
   }) {
@@ -1080,7 +1456,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_8_loose(container, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 42)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_optical_file_data,
@@ -1110,7 +1486,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_8_loose(envelope, serializer);
           sse_encode_list_prim_u_8_loose(judgeSecretKey, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 43)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_optical_file_data,
@@ -1140,7 +1516,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_8_loose(container, serializer);
           sse_encode_String(password, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 44)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_optical_file_data,
@@ -1254,6 +1630,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  QrTrackerState dco_decode_box_autoadd_qr_tracker_state(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_qr_tracker_state(raw);
+  }
+
+  @protected
   int dco_decode_box_autoadd_u_16(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -1306,6 +1688,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       publicKey: dco_decode_list_prim_u_8_strict(arr[0]),
       secretKey: dco_decode_list_prim_u_8_strict(arr[1]),
     );
+  }
+
+  @protected
+  Float64List dco_decode_list_prim_f_64_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as Float64List;
   }
 
   @protected
@@ -1448,6 +1836,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  QrDecodeResult dco_decode_qr_decode_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return QrDecodeResult(
+      bytes: dco_decode_opt_list_prim_u_8_strict(arr[0]),
+      tracker: dco_decode_qr_tracker_state(arr[1]),
+    );
+  }
+
+  @protected
   QrMatrix dco_decode_qr_matrix(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -1457,6 +1857,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       width: dco_decode_u_32(arr[0]),
       height: dco_decode_u_32(arr[1]),
       cells: dco_decode_list_prim_u_8_strict(arr[2]),
+    );
+  }
+
+  @protected
+  QrTrackerState dco_decode_qr_tracker_state(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    return QrTrackerState.raw(
+      active: dco_decode_bool(arr[0]),
+      x0: dco_decode_u_32(arr[1]),
+      y0: dco_decode_u_32(arr[2]),
+      x1: dco_decode_u_32(arr[3]),
+      y1: dco_decode_u_32(arr[4]),
+      hits: dco_decode_u_32(arr[5]),
+      failures: dco_decode_u_32(arr[6]),
+      qrVersion: dco_decode_u_8(arr[7]),
+      lastThreshold: dco_decode_u_8(arr[8]),
     );
   }
 
@@ -1652,6 +2071,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  QrTrackerState sse_decode_box_autoadd_qr_tracker_state(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_qr_tracker_state(deserializer));
+  }
+
+  @protected
   int sse_decode_box_autoadd_u_16(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_u_16(deserializer));
@@ -1702,6 +2129,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_publicKey = sse_decode_list_prim_u_8_strict(deserializer);
     var var_secretKey = sse_decode_list_prim_u_8_strict(deserializer);
     return JudgeKeyPairData(publicKey: var_publicKey, secretKey: var_secretKey);
+  }
+
+  @protected
+  Float64List sse_decode_list_prim_f_64_strict(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getFloat64List(len_);
   }
 
   @protected
@@ -1908,12 +2342,45 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  QrDecodeResult sse_decode_qr_decode_result(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_bytes = sse_decode_opt_list_prim_u_8_strict(deserializer);
+    var var_tracker = sse_decode_qr_tracker_state(deserializer);
+    return QrDecodeResult(bytes: var_bytes, tracker: var_tracker);
+  }
+
+  @protected
   QrMatrix sse_decode_qr_matrix(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_width = sse_decode_u_32(deserializer);
     var var_height = sse_decode_u_32(deserializer);
     var var_cells = sse_decode_list_prim_u_8_strict(deserializer);
     return QrMatrix(width: var_width, height: var_height, cells: var_cells);
+  }
+
+  @protected
+  QrTrackerState sse_decode_qr_tracker_state(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_active = sse_decode_bool(deserializer);
+    var var_x0 = sse_decode_u_32(deserializer);
+    var var_y0 = sse_decode_u_32(deserializer);
+    var var_x1 = sse_decode_u_32(deserializer);
+    var var_y1 = sse_decode_u_32(deserializer);
+    var var_hits = sse_decode_u_32(deserializer);
+    var var_failures = sse_decode_u_32(deserializer);
+    var var_qrVersion = sse_decode_u_8(deserializer);
+    var var_lastThreshold = sse_decode_u_8(deserializer);
+    return QrTrackerState.raw(
+      active: var_active,
+      x0: var_x0,
+      y0: var_y0,
+      x1: var_x1,
+      y1: var_y1,
+      hits: var_hits,
+      failures: var_failures,
+      qrVersion: var_qrVersion,
+      lastThreshold: var_lastThreshold,
+    );
   }
 
   @protected
@@ -2116,6 +2583,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_qr_tracker_state(
+    QrTrackerState self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_qr_tracker_state(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_u_16(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_16(self, serializer);
@@ -2164,6 +2640,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_list_prim_u_8_strict(self.publicKey, serializer);
     sse_encode_list_prim_u_8_strict(self.secretKey, serializer);
+  }
+
+  @protected
+  void sse_encode_list_prim_f_64_strict(
+    Float64List self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putFloat64List(self);
   }
 
   @protected
@@ -2346,11 +2832,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_qr_decode_result(
+    QrDecodeResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_list_prim_u_8_strict(self.bytes, serializer);
+    sse_encode_qr_tracker_state(self.tracker, serializer);
+  }
+
+  @protected
   void sse_encode_qr_matrix(QrMatrix self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_32(self.width, serializer);
     sse_encode_u_32(self.height, serializer);
     sse_encode_list_prim_u_8_strict(self.cells, serializer);
+  }
+
+  @protected
+  void sse_encode_qr_tracker_state(
+    QrTrackerState self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.active, serializer);
+    sse_encode_u_32(self.x0, serializer);
+    sse_encode_u_32(self.y0, serializer);
+    sse_encode_u_32(self.x1, serializer);
+    sse_encode_u_32(self.y1, serializer);
+    sse_encode_u_32(self.hits, serializer);
+    sse_encode_u_32(self.failures, serializer);
+    sse_encode_u_8(self.qrVersion, serializer);
+    sse_encode_u_8(self.lastThreshold, serializer);
   }
 
   @protected

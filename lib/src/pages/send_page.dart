@@ -40,7 +40,13 @@ class _SendPageState extends State<SendPage> {
   final TextEditingController _password = TextEditingController();
   final TextEditingController _judgePublicKey = TextEditingController();
   int _fps = SenderController.defaultFps;
-  int _frameBytes = defaultFrameSize();
+  double _symbolRate = 8.0;
+  int _dwell = 1;
+  List<int> _symbolRatePresets = const [4, 8, 15, 30];
+
+  /// `null` means "Auto": the best frame size for the current payload is
+  /// picked by the Rust heuristic at start time instead of guessing.
+  int? _frameBytes;
   List<int> _frameOptions = const [];
   final bool _darkOnLight = true;
 
@@ -57,14 +63,18 @@ class _SendPageState extends State<SendPage> {
   Future<void> _loadSettings() async {
     final options = frameSizeOptions();
     final supported = encryptionSupported();
+    final symbolPresets = symbolRatePresets();
     if (!mounted) {
       return;
     }
     setState(() {
       _frameOptions = options;
-      final preferred = defaultFrameSize();
-      if (_frameOptions.isNotEmpty && _frameOptions.contains(preferred)) {
-        _frameBytes = preferred;
+      // Auto is the default: it scores candidate payloads and picks the one
+      // with the best estimated goodput instead of always using the largest.
+      _frameBytes = null;
+      if (symbolPresets.isNotEmpty) {
+        _symbolRatePresets = symbolPresets.map((v) => v.round()).toList();
+        _symbolRate = defaultSymbolRate();
       }
       _encryptionSupported = supported;
     });
@@ -176,12 +186,19 @@ class _SendPageState extends State<SendPage> {
       }
       final session = senderCreate(
         container: container,
-        frameBytes: _frameBytes,
+        // Auto frame size: let the heuristic pick the best candidate for the
+        // actual payload instead of forcing a manually-guessed size.
+        frameBytes:
+            _frameBytes ??
+            autoFrameSizeFor(payloadLen: container.length) ??
+            defaultFrameSize(),
         sessionId: null,
       );
       final info = senderInfo(session: session);
       final controller = SenderController(session: session, info: info)
-        ..setFps(_fps);
+        ..setFps(_fps)
+        ..setSymbolRate(_symbolRate)
+        ..setDwellPeriods(_dwell);
       if (!mounted) {
         controller.dispose();
         return;
@@ -385,16 +402,63 @@ class _SendPageState extends State<SendPage> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<int>(
+              initialValue: _symbolRate.round(),
+              decoration: InputDecoration(
+                labelText: s.symbolRate,
+                prefixIcon: const Icon(Icons.qr_code_2),
+                border: const OutlineInputBorder(),
+              ),
+              items: _symbolRatePresets
+                  .map(
+                    (v) => DropdownMenuItem(
+                      value: v,
+                      child: Text('$v ${s.symbolsPerSecond}'),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (v) =>
+                  setState(() => _symbolRate = (v ?? 8).toDouble()),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              s.symbolRateHint,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              initialValue: _dwell,
+              decoration: InputDecoration(
+                labelText: s.dwellPeriods,
+                prefixIcon: const Icon(Icons.repeat),
+                border: const OutlineInputBorder(),
+              ),
+              items: const [1, 2, 3, 4]
+                  .map(
+                    (v) => DropdownMenuItem(
+                      value: v,
+                      child: Text('$v ${s.displayPeriods}'),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (v) => setState(() => _dwell = v ?? 1),
+            ),
+            const SizedBox(height: 6),
+            Text(s.dwellHint, style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int?>(
               initialValue: _frameBytes,
               decoration: InputDecoration(
                 labelText: s.frameSize,
                 prefixIcon: const Icon(Icons.aspect_ratio),
                 border: const OutlineInputBorder(),
               ),
-              items: _frameOptions
-                  .map((v) => DropdownMenuItem(value: v, child: Text('$v B')))
-                  .toList(),
-              onChanged: (v) => setState(() => _frameBytes = v ?? _frameBytes),
+              items: [
+                const DropdownMenuItem<int?>(value: null, child: Text('Auto')),
+                ..._frameOptions.map(
+                  (v) => DropdownMenuItem<int?>(value: v, child: Text('$v B')),
+                ),
+              ],
+              onChanged: (v) => setState(() => _frameBytes = v),
             ),
             const SizedBox(height: 6),
             Text(s.frameSizeHint, style: Theme.of(context).textTheme.bodySmall),

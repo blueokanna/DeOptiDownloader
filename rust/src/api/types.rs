@@ -124,11 +124,8 @@ pub struct JudgeKeyPairData {
 /// with [`unpack_file_jrc_ffi`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JrcPackedData {
-    /// Serialized JRC envelope fed to the fountain sender.
     pub envelope: Vec<u8>,
-    /// Original file size in bytes.
     pub original_size: u32,
-    /// Envelope size in bytes (what actually goes over the light).
     pub transmitted_size: u32,
 }
 
@@ -137,19 +134,46 @@ pub struct JrcPackedData {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ManifestInfo {
     pub session_id: u16,
-    /// Source block count.
     pub k: u16,
-    /// Payload bytes per fountain frame.
     pub block_len: u16,
-    /// Protected container length in bytes.
     pub total_len: u32,
-    /// Total bytes per frame on the wire.
     pub frame_bytes: u32,
-    /// QR version (1..=40) used to carry one data frame.
     pub qr_version: u8,
-    /// Transmission mode: `"causal"`, `"systematic"` or `"rsd"`.
     pub mode: String,
     pub file_name: String,
     pub mime_type: String,
     pub encrypted: bool,
+}
+
+/// Temporal QR tracker state, updated functionally across frames.
+///
+/// After the first successful decode the tracker remembers where the symbol
+/// was and only searches a small region of interest around it for the next
+/// frames, falling back to a full-frame search only after consecutive misses.
+/// The receiver feeds the returned state back on every frame, so no global
+/// mutable state is needed and the bridge stays stateless.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct QrTrackerState {
+    pub active: bool,
+    pub x0: u32,
+    pub y0: u32,
+    pub x1: u32,
+    pub y1: u32,
+    pub hits: u32,
+    pub failures: u32,
+    pub qr_version: u8,
+    pub last_threshold: u8,
+}
+
+impl QrTrackerState {
+    /// A fresh, inactive tracker.
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QrDecodeResult {
+    pub bytes: Option<Vec<u8>>,
+    pub tracker: QrTrackerState,
 }

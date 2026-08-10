@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// A file packed for judge-recoverable optical transfer (JRC mode).
 ///
@@ -16,13 +16,8 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 /// (holding the matching secret key) recovers the original DCF3 container
 /// with [`unpack_file_jrc_ffi`].
 class JrcPackedData {
-  /// Serialized JRC envelope fed to the fountain sender.
   final Uint8List envelope;
-
-  /// Original file size in bytes.
   final int originalSize;
-
-  /// Envelope size in bytes (what actually goes over the light).
   final int transmittedSize;
 
   const JrcPackedData({
@@ -75,23 +70,11 @@ class JudgeKeyPairData {
 /// so the receiver can preview the transfer before any data frame arrives.
 class ManifestInfo {
   final int sessionId;
-
-  /// Source block count.
   final int k;
-
-  /// Payload bytes per fountain frame.
   final int blockLen;
-
-  /// Protected container length in bytes.
   final int totalLen;
-
-  /// Total bytes per frame on the wire.
   final int frameBytes;
-
-  /// QR version (1..=40) used to carry one data frame.
   final int qrVersion;
-
-  /// Transmission mode: `"causal"`, `"systematic"` or `"rsd"`.
   final String mode;
   final String fileName;
   final String mimeType;
@@ -236,6 +219,24 @@ enum PushStatus {
   complete,
 }
 
+class QrDecodeResult {
+  final Uint8List? bytes;
+  final QrTrackerState tracker;
+
+  const QrDecodeResult({this.bytes, required this.tracker});
+
+  @override
+  int get hashCode => bytes.hashCode ^ tracker.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QrDecodeResult &&
+          runtimeType == other.runtimeType &&
+          bytes == other.bytes &&
+          tracker == other.tracker;
+}
+
 /// A QR symbol as a binary module matrix.
 ///
 /// `cells` is row-major and holds `width * height` entries, each `0` (light)
@@ -262,6 +263,71 @@ class QrMatrix {
           width == other.width &&
           height == other.height &&
           cells == other.cells;
+}
+
+/// Temporal QR tracker state, updated functionally across frames.
+///
+/// After the first successful decode the tracker remembers where the symbol
+/// was and only searches a small region of interest around it for the next
+/// frames, falling back to a full-frame search only after consecutive misses.
+/// The receiver feeds the returned state back on every frame, so no global
+/// mutable state is needed and the bridge stays stateless.
+class QrTrackerState {
+  final bool active;
+  final int x0;
+  final int y0;
+  final int x1;
+  final int y1;
+  final int hits;
+  final int failures;
+  final int qrVersion;
+  final int lastThreshold;
+
+  const QrTrackerState.raw({
+    required this.active,
+    required this.x0,
+    required this.y0,
+    required this.x1,
+    required this.y1,
+    required this.hits,
+    required this.failures,
+    required this.qrVersion,
+    required this.lastThreshold,
+  });
+
+  static QrTrackerState default_() =>
+      RustLib.instance.api.crateApiTypesQrTrackerStateDefault();
+
+  /// A fresh, inactive tracker.
+  factory QrTrackerState() =>
+      RustLib.instance.api.crateApiTypesQrTrackerStateNew();
+
+  @override
+  int get hashCode =>
+      active.hashCode ^
+      x0.hashCode ^
+      y0.hashCode ^
+      x1.hashCode ^
+      y1.hashCode ^
+      hits.hashCode ^
+      failures.hashCode ^
+      qrVersion.hashCode ^
+      lastThreshold.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QrTrackerState &&
+          runtimeType == other.runtimeType &&
+          active == other.active &&
+          x0 == other.x0 &&
+          y0 == other.y0 &&
+          x1 == other.x1 &&
+          y1 == other.y1 &&
+          hits == other.hits &&
+          failures == other.failures &&
+          qrVersion == other.qrVersion &&
+          lastThreshold == other.lastThreshold;
 }
 
 /// Outcome of one `receiver_push` call, carrying live session state so the UI

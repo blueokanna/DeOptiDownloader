@@ -53,6 +53,35 @@ int? smallestSufficientFrameSizeFor({required int payloadLen}) => RustLib
 double fountainOverhead() =>
     RustLib.instance.api.crateApiTransferFountainOverhead();
 
+/// Auto-search probes for the "Auto" frame-size mode.
+Uint32List frameSizeCandidates() =>
+    RustLib.instance.api.crateApiTransferFrameSizeCandidates();
+
+/// Symbol-rate presets (symbols per second) offered by the sender.
+Float64List symbolRatePresets() =>
+    RustLib.instance.api.crateApiTransferSymbolRatePresets();
+
+/// Default symbol rate (8 symbols/s ≈ 125 ms dwell per QR).
+double defaultSymbolRate() =>
+    RustLib.instance.api.crateApiTransferDefaultSymbolRate();
+
+/// Pick the frame size that maximizes the estimated end-to-end goodput
+/// `G(B) = B · p(B) / (t_display(B) + t_decode(B))` over the auto-search
+/// probes, where:
+/// - `B` is the payload bytes per frame,
+/// - `p(B)` is a reliability model that rolls off with QR module density,
+/// - `t_display(B)` is the fixed symbol dwell (`1 / symbol_rate`),
+/// - `t_decode(B)` is a module-area decoder-cost model.
+///
+/// Returns `None` when no candidate can carry `payload_len` (e.g. too large).
+///
+/// This is a deterministic engineering heuristic — the constants above are
+/// documented estimates, not measured curves. It simply stops the user from
+/// having to guess "frame size" by hand; the definitive per-device numbers
+/// still need a calibration run on the target phone.
+int? autoFrameSizeFor({required int payloadLen}) => RustLib.instance.api
+    .crateApiTransferAutoFrameSizeFor(payloadLen: payloadLen);
+
 /// Pack a file (name + MIME + bytes) into a DCF3 container.
 PackedFileData packFileFfi({
   required String name,

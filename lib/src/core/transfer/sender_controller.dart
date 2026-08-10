@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
@@ -34,12 +35,18 @@ class SenderStats {
   }
 }
 
-/// Drives one sending session: emits fountain frames + their QR rendering at a
-/// target frame rate and publishes the latest matrix for the painter.
+/// Drives one sending session: emits fountain frames + their QR rendering at
+/// a target *symbol* rate and publishes the latest matrix for the painter.
+///
+/// The screen refresh rate (fps) and the QR symbol rate are independent knobs:
+/// the screen still repaints every frame, but a new QR symbol is produced only
+/// every `ticksPerSymbol` display periods. Each symbol therefore stays on
+/// screen for a dwell of ~`ticksPerSymbol / fps` seconds (≥ 1 display period),
+/// giving a 5–10 fps receiver camera several exposure-stable reads per QR.
 ///
 /// Threading model: a drift-corrected `Timer` enqueues ticks; a single async
 /// drain loop calls the bridge once per tick (never concurrently), so a slow
-/// decode/encode cycle drops frames instead of queueing them up.
+/// encode cycle drops ticks instead of queueing them up.
 class SenderController extends ChangeNotifier {
   SenderController({required this.session, required this.info});
 
@@ -57,6 +64,14 @@ class SenderController extends ChangeNotifier {
   int _fps = defaultFps;
   int get fps => _fps;
 
+  /// New QR symbols per second (default 8 ⇒ ~125 ms dwell at any fps).
+  double _symbolRate = defaultSymbolRate();
+  double get symbolRate => _symbolRate;
+
+  /// How many display periods each symbol is held (repeat count).
+  int _dwellPeriods = 1;
+  int get dwellPeriods => _dwellPeriods;
+
   bool _running = false;
   bool _paused = false;
   bool _inSetup = false;
@@ -69,6 +84,7 @@ class SenderController extends ChangeNotifier {
 
   int _framesSent = 0;
   int _pendingTicks = 0;
+  int _ticksInSymbol = 0;
   bool _draining = false;
   bool _disposed = false;
   int _generation = 0;
@@ -78,9 +94,34 @@ class SenderController extends ChangeNotifier {
   final List<Duration> _frameTimestamps = [];
   DateTime? _lastStatsAt;
 
-  /// Sets the target frame rate; takes effect on the next schedule.
+  /// Screen display periods per new QR symbol.
+  ///
+  /// The symbol must stay at least one display period and at least
+  /// `fps / symbolRate` periods to hit the requested symbol rate.
+  int get ticksPerSymbol =>
+      math.max(_dwellPeriods, (_fps / _symbolRate).ceil().clamp(1, _fps));
+
+  /// Sets the screen refresh rate; takes effect on the next schedule.
   void setFps(int fps) {
     _fps = fps.clamp(1, 120);
+    if (_running) {
+      _schedule();
+    }
+  }
+
+  /// Sets the QR symbol rate (1..fps symbols per second). Independent of the
+  /// screen refresh rate.
+  void setSymbolRate(double rate) {
+    _symbolRate = rate.clamp(1.0, _fps.toDouble());
+    if (_running) {
+      _schedule();
+    }
+  }
+
+  /// Sets how many display periods each symbol stays on screen (1..8).
+  /// Equivalent to "repeat the same seq for N display periods".
+  void setDwellPeriods(int periods) {
+    _dwellPeriods = periods.clamp(1, 8);
     if (_running) {
       _schedule();
     }
@@ -111,6 +152,7 @@ class SenderController extends ChangeNotifier {
       _setupTimer = null;
       _inSetup = false;
       _framesSent = 0;
+      _ticksInSymbol = 0;
       _frameTimestamps.clear();
       _clock
         ..reset()
@@ -128,6 +170,7 @@ class SenderController extends ChangeNotifier {
     _running = true;
     _paused = false;
     _framesSent = 0;
+    _ticksInSymbol = 0;
     _frameTimestamps.clear();
     _clock
       ..reset()
@@ -159,6 +202,7 @@ class SenderController extends ChangeNotifier {
     _paused = false;
     _inSetup = false;
     _pendingTicks = 0;
+    _ticksInSymbol = 0;
     notifyListeners();
   }
 
@@ -193,6 +237,14 @@ class SenderController extends ChangeNotifier {
 
   Future<void> _emitOnce() async {
     final generation = _generation;
+    _ticksInSymbol++;
+    if (_ticksInSymbol < ticksPerSymbol) {
+      // Hold the current symbol for the remaining display periods so the
+      // receiver gets several stable reads; only stats refresh.
+      _maybePublishStats();
+      return;
+    }
+    _ticksInSymbol = 0;
     try {
       final frame = await senderNextQr(session: session);
       if (_disposed || !_running || _paused || generation != _generation) {
