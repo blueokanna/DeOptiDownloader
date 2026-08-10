@@ -378,7 +378,7 @@ Three workflows ship in [.github/workflows](.github/workflows):
 | Workflow | What it runs |
 | --- | --- |
 | `ci.yml` | Rust workspace `fmt --check` + `clippy -D warnings` (default **and** `encryption` features) + `test` (lib + server); Flutter `analyze` + `test` (native lib built first); a real `flutter_rust_bridge build-web` + `flutter build web` (bundle uploaded as artifact); `docker build` |
-| `deploy-pages.yml` | Builds the Web/WASM bundle and publishes it to GitHub Pages (enable *Settings → Pages → Source: GitHub Actions*) |
+| `deploy-pages.yml` | Verifies GitHub Pages is enabled (auto-enables it via the API when missing, otherwise fails with precise instructions), builds the Web/WASM bundle and publishes it to GitHub Pages |
 | `release.yml` | Builds every platform artifact and publishes a GitHub Release (see below) |
 
 Every command in the workflows is the exact command developers run locally, so

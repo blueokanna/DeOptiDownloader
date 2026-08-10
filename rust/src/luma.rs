@@ -91,13 +91,18 @@ pub fn integer_fit(width: u32, height: u32, max_dim: u32) -> bool {
 /// row stride and pixel stride (mirrors the Dart-side guard in the old
 /// decimation path).
 #[inline]
-pub fn yplane_len_ok(raw_len: usize, width: u32, height: u32, row_stride: u32, pixel_stride: u32) -> bool {
+pub fn yplane_len_ok(
+    raw_len: usize,
+    width: u32,
+    height: u32,
+    row_stride: u32,
+    pixel_stride: u32,
+) -> bool {
     if width == 0 || height == 0 || row_stride == 0 || pixel_stride == 0 {
         return false;
     }
-    let required = (height - 1) as u64 * row_stride as u64
-        + (width - 1) as u64 * pixel_stride as u64
-        + 1;
+    let required =
+        (height - 1) as u64 * row_stride as u64 + (width - 1) as u64 * pixel_stride as u64 + 1;
     raw_len as u64 >= required
 }
 
@@ -150,7 +155,14 @@ pub fn yplane_to_gray(
     }
 
     // Decimation: two-pass separable box filter (horizontal then vertical).
-    let tmp = box_horizontal_yplane(raw, width, height, row_stride as usize, pixel_stride as usize, step);
+    let tmp = box_horizontal_yplane(
+        raw,
+        width,
+        height,
+        row_stride as usize,
+        pixel_stride as usize,
+        step,
+    );
     let data = box_vertical(&tmp, height, out_h, out_w, step);
     Some(GrayFrame::new(data, out_w, out_h))
 }
@@ -690,7 +702,7 @@ mod neon {
         let mut i = 0usize;
         while i + 16 <= row.len() {
             let v = vld1q_u8(row.as_ptr().add(i));
-            let lo = vmovl_u8(vget_low_u8(v));  // [B0,G0,R0,A0,B1,G1,R1,A1]
+            let lo = vmovl_u8(vget_low_u8(v)); // [B0,G0,R0,A0,B1,G1,R1,A1]
             let hi = vmovl_u8(vget_high_u8(v)); // [B2,G2,R2,A2,B3,G3,R3,A3]
             let l0 = luma_quad(lo);
             let l1 = luma_quad(hi);
@@ -716,10 +728,10 @@ mod neon {
         let s = vreinterpretq_u16_u64(vshlq_n_u64(vreinterpretq_u64_u16(u), 16));
         let coef = vld1q_u16(COEF.as_ptr());
         let m = vmulq_u16(s, coef); // [0, 29B, 150G, 77R, 0, 29B', 150G', 77R']
-        // Pairwise add within 64-bit lanes: [29B, 150G+77R, ...]
+                                    // Pairwise add within 64-bit lanes: [29B, 150G+77R, ...]
         let pa = vpaddq_u16(m, m); // [29B, L, 29B', L', 29B, L, 29B', L']
-        // lane0 = 29B, lane1 = L → luma = lane0 + lane1. Add the lane shifted
-        // right by 16 bits so lane0 becomes 29B + L and lane2 becomes 29B' + L'.
+                                   // lane0 = 29B, lane1 = L → luma = lane0 + lane1. Add the lane shifted
+                                   // right by 16 bits so lane0 becomes 29B + L and lane2 becomes 29B' + L'.
         let shifted = vreinterpretq_u16_u64(vshrq_n_u64(vreinterpretq_u64_u16(pa), 16));
         let l = vaddq_u16(pa, shifted); // lane0 = luma, lane2 = luma'
         vshrq_n_u16(l, 8)
@@ -733,10 +745,18 @@ mod neon {
         [0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         [0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         [0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0],
+        [
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ],
+        [
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ],
+        [
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ],
+        [
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0,
+        ],
     ];
 }
 
@@ -750,7 +770,13 @@ mod tests {
 
     /// Scalar-reference vertical box, so the SIMD vertical kernel is validated
     /// against an independent implementation (not itself).
-    fn box_vertical_scalar_ref(tmp: &[u8], height: u32, out_h: u32, out_w: u32, step: u32) -> Vec<u8> {
+    fn box_vertical_scalar_ref(
+        tmp: &[u8],
+        height: u32,
+        out_h: u32,
+        out_w: u32,
+        step: u32,
+    ) -> Vec<u8> {
         let h = height as usize;
         let ow = out_w as usize;
         let s = step as usize;

@@ -1,11 +1,29 @@
 # Build the Web/WASM bundle and publish it to GitHub Pages.
 #
-# Requires: Settings → Pages → Source: "GitHub Actions".
+# Triggers:
+#   - push to `main`
+#   - manual `workflow_dispatch`
 #
-# Note on cross-origin isolation: the sync FRB bridge used by this app does
-# NOT need SharedArrayBuffer, so GitHub Pages (which cannot send custom
-# COOP/COEP headers) works fine. If the bridge is ever switched back to a
-# threaded worker pool, self-host on nginx with the headers in nginx.conf.
+# Requires GitHub Pages to be enabled for this repository. The `preflight`
+# job verifies this BEFORE the (expensive) web build:
+#   - `GET /repos/{owner}/{repo}/pages` succeeds          → Pages is enabled, continue.
+#   - it returns 404                                      → Pages is NOT enabled; the
+#     workflow tries `POST .../pages` with build_type "workflow" to enable it.
+#   - that also fails (enterprise policy / permissions)   → the workflow fails with
+#     an actionable message instead of GitHub's cryptic "HttpError: Not Found".
+#
+# This 404 is GitHub's standard reply when the Pages site does not exist yet,
+# and it is what makes `actions/deploy-pages` fail on a fresh repo — the
+# preflight turns it into either an automatic fix or a precise diagnostic.
+#
+# Custom domain: if a custom domain is configured (see Settings → Pages), its
+# DNS records (A/AAAA or CNAME plus the required TXT verification) must be in
+# place or GitHub keeps the site in "errored" state and deployments 404.
+#
+# Cross-origin isolation: the sync FRB bridge used by this app does NOT need
+# SharedArrayBuffer, so GitHub Pages (which cannot send custom COOP/COEP
+# headers) works fine. If the bridge is ever switched back to a threaded
+# worker pool, self-host on nginx with the headers in nginx.conf.
 
 name: Deploy Web to GitHub Pages
 
@@ -28,8 +46,53 @@ env:
   WASM_BINDGEN_VERSION: '0.2.92'
 
 jobs:
-  build:
+  # ---------------------------------------------------------------------------
+  # Fail fast: verify GitHub Pages is enabled; enable it when possible;
+  # otherwise stop with precise instructions before any build runs.
+  # ---------------------------------------------------------------------------
+  preflight:
+    name: Verify GitHub Pages
     runs-on: ubuntu-latest
+    steps:
+      - name: Check GitHub Pages (enable if missing)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          REPO="${{ github.repository }}"
+          SETTINGS="https://github.com/${REPO}/settings/pages"
+
+          # GET /repos/{owner}/{repo}/pages → 404 means the site does not exist.
+          if gh api "repos/${REPO}/pages" >/tmp/pages.json 2>/dev/null; then
+            status="$(jq -r '.status // "unknown"' /tmp/pages.json)"
+            cname="$(jq -r '.cname // "none"' /tmp/pages.json)"
+            echo "::notice::GitHub Pages is enabled — status=${status}, custom domain=${cname}"
+            if [ "$status" = "errored" ]; then
+              echo "::warning::The Pages site is in 'errored' state. Check the custom domain DNS records at ${SETTINGS}."
+            fi
+            exit 0
+          fi
+
+          echo "::warning::GitHub Pages is not enabled for ${REPO} — attempting to enable it via the API."
+          if gh api -X POST "repos/${REPO}/pages" -f build_type=workflow \
+              >/tmp/pages.json 2>/tmp/pages-error.txt; then
+            echo "::notice::GitHub Pages enabled (build_type=workflow); the first deployment creates the site."
+            exit 0
+          fi
+
+          echo "::error::Could not enable GitHub Pages automatically."
+          cat /tmp/pages-error.txt >&2
+          echo "::error::Open ${SETTINGS}, set Source to \"GitHub Actions\", click Save, then re-run this workflow."
+          echo "::error::If this repository belongs to a GitHub Enterprise org/enterprise, an admin must enable GitHub Pages."
+          exit 1
+
+  # ---------------------------------------------------------------------------
+  # Build the Web/WASM bundle and upload it as the "github-pages" artifact.
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build Web bundle
+    runs-on: ubuntu-latest
+    needs: preflight
     steps:
       - uses: actions/checkout@v4
 
@@ -39,6 +102,7 @@ jobs:
           channel: stable
           cache: true
 
+      # FRB build-web compiles with -Z build-std (nightly + rust-src).
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rust-src
@@ -52,8 +116,8 @@ jobs:
         run: |
           curl -sSL https://github.com/rustwasm/wasm-pack/releases/download/v0.15.0/wasm-pack-v0.15.0-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /tmp
           sudo cp /tmp/wasm-pack-v0.15.0-x86_64-unknown-linux-musl/wasm-pack /usr/local/bin/
-          curl -sSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.92/wasm-bindgen-0.2.92-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /tmp
-          sudo cp /tmp/wasm-bindgen-0.2.92-x86_64-unknown-linux-musl/wasm-bindgen /usr/local/bin/
+          curl -sSL https://github.com/rustwasm/wasm-bindgen/releases/download/${{ env.WASM_BINDGEN_VERSION }}/wasm-bindgen-${{ env.WASM_BINDGEN_VERSION }}-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /tmp
+          sudo cp /tmp/wasm-bindgen-${{ env.WASM_BINDGEN_VERSION }}-x86_64-unknown-linux-musl/wasm-bindgen /usr/local/bin/
           wasm-pack --version
           wasm-bindgen --version
 
@@ -67,12 +131,17 @@ jobs:
         run: flutter build web --release
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: build/web
 
+  # ---------------------------------------------------------------------------
+  # Deploy the uploaded artifact. `actions/deploy-pages@v5` runs on Node 24
+  # (no deprecation warning) and is compatible with upload-pages-artifact@v5.
+  # ---------------------------------------------------------------------------
   deploy:
-    needs: build
+    name: Deploy to GitHub Pages
+    needs: [preflight, build]
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -80,4 +149,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

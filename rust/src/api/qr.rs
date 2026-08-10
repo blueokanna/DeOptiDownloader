@@ -528,7 +528,14 @@ mod tests {
         let symbol_pixels = (matrix.width as usize + 8) * MODULE;
         let origin_x = (SCENE_WIDTH - symbol_pixels) / 2;
         let origin_y = (SCENE_HEIGHT - symbol_pixels) / 2;
-        let scene = render_scene(&matrix, SCENE_WIDTH, SCENE_HEIGHT, MODULE, origin_x, origin_y);
+        let scene = render_scene(
+            &matrix,
+            SCENE_WIDTH,
+            SCENE_HEIGHT,
+            MODULE,
+            origin_x,
+            origin_y,
+        );
 
         let decoded = qr_decode_gray(scene, SCENE_WIDTH as u32, SCENE_HEIGHT as u32, None)
             .expect("decode dense screen QR");
@@ -619,9 +626,14 @@ mod tests {
 
         // Lock at (100, 100).
         let scene = render_scene(&matrix, SCENE, SCENE, MODULE, 100, 100);
-        let r0 =
-            qr_decode_gray_tracked(scene, SCENE as u32, SCENE as u32, None, QrTrackerState::new())
-                .expect("decode");
+        let r0 = qr_decode_gray_tracked(
+            scene,
+            SCENE as u32,
+            SCENE as u32,
+            None,
+            QrTrackerState::new(),
+        )
+        .expect("decode");
         let mut tracker = r0.tracker;
         assert!(tracker.active);
 
@@ -643,7 +655,11 @@ mod tests {
         assert_eq!(r.bytes.as_deref(), Some(payload.as_slice()));
         assert!(r.tracker.active);
         assert_eq!(r.tracker.failures, 0);
-        assert!(r.tracker.x0 >= 500, "ROI must relocate, got {:?}", r.tracker);
+        assert!(
+            r.tracker.x0 >= 500,
+            "ROI must relocate, got {:?}",
+            r.tracker
+        );
     }
 
     #[test]
@@ -654,9 +670,14 @@ mod tests {
         const MODULE: usize = 6;
 
         let scene = render_scene(&matrix, SCENE, SCENE, MODULE, 80, 80);
-        let r0 =
-            qr_decode_gray_tracked(scene, SCENE as u32, SCENE as u32, None, QrTrackerState::new())
-                .expect("decode");
+        let r0 = qr_decode_gray_tracked(
+            scene,
+            SCENE as u32,
+            SCENE as u32,
+            None,
+            QrTrackerState::new(),
+        )
+        .expect("decode");
         let tracker = r0.tracker;
         assert!(tracker.active);
         assert!(tracker.last_threshold > 0);

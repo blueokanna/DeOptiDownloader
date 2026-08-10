@@ -324,7 +324,7 @@ SPA 回退与严格的路径穿越防护。参数：`--root`、`--host`、`--por
 | 工作流             | 运行内容                                                                                                                                                                                 |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ci.yml`           | Rust workspace `fmt --check` + `clippy -D warnings`（默认 **与** `encryption` 特性）+ `test`（库 + 服务器）；Flutter `analyze` + `test`（先构建原生库）；真实的 `flutter_rust_bridge build-web` + `flutter build web`（上传产物）；`docker build` |
-| `deploy-pages.yml` | 构建 Web/WASM 产物并发布到 GitHub Pages（需在 _Settings → Pages → Source: GitHub Actions_ 开启）                                                                                         |
+| `deploy-pages.yml` | 先校验 GitHub Pages 是否启用（缺失时通过 API 自动启用，否则给出精确指引），再构建 Web/WASM 产物并发布到 GitHub Pages |
 | `release.yml`      | 构建全平台产物并发布 GitHub Release（见下方“发布 Release”）                                                                                                                             |
 
 工作流中的每一条命令都与开发者本地执行的命令完全一致，因此绿色流水线是有意义的。
