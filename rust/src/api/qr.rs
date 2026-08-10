@@ -228,20 +228,29 @@ fn decode_tracked_scan(
     if (width as u64) * (height as u64) != gray.len() as u64 {
         return Err("decode_tracked_scan: buffer size mismatch".to_owned());
     }
-    let mean = luma::mean_luma(&gray);
     let mut t = tracker;
 
-    // A large scene-brightness jump (screen off, hand over the camera, lamp
-    // change) makes the old geometry meaningless; restart the search.
-    if t.active && t.last_threshold != 0 && mean.abs_diff(t.last_threshold) > SCENE_SWING {
-        t = QrTrackerState::new();
+    // Scene-brightness tracking is only needed while following a symbol; the
+    // mean-luma pass over the whole scan frame is skipped while idle (the
+    // common no-signal case) to keep searching as cheap as possible.
+    if t.active {
+        let mean = luma::mean_luma(&gray);
+        // A large scene-brightness jump (screen off, hand over the camera,
+        // lamp change) makes the old geometry meaningless; restart the search.
+        if t.last_threshold != 0 && mean.abs_diff(t.last_threshold) > SCENE_SWING {
+            t = QrTrackerState::new();
+        } else {
+            t.last_threshold = mean;
+        }
     }
-    t.last_threshold = mean;
 
-    // ROI-first: follow the symbol we already found.
+    // ROI-first: follow the symbol we already found. The crop is small, so a
+    // single TryHarder pass on the crop is both faster (no redundant 640px
+    // fast-pass downscale) and more reliable for dense symbols than the
+    // coarse-to-fine path.
     if t.active && t.failures < ROI_FALLBACK_FAILURES {
         if let Some((crop, ox, oy, cw, ch)) = crop_roi(&gray, width, height, &t) {
-            if let Some(qr) = decode_scan_coarse_to_fine(crop, cw, ch, max_dim)? {
+            if let Some(qr) = decode_luma(crop, cw, ch, true)? {
                 let mut points = qr.points;
                 for p in &mut points {
                     p.0 += ox as f32;
@@ -269,7 +278,7 @@ fn decode_tracked_scan(
     // Full-frame finder-pattern search: first lock, or after ROI misses.
     if let Some(qr) = decode_scan_coarse_to_fine(gray, width, height, max_dim)? {
         let mut t2 = QrTrackerState::new();
-        t2.last_threshold = mean;
+        t2.last_threshold = luma::mean_luma(&gray);
         update_tracker_roi(&mut t2, &qr.points, width, height);
         t2.qr_version = qr_version_for(qr.bytes.len()).unwrap_or(0);
         return Ok(QrDecodeResult {

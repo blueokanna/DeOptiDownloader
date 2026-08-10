@@ -91,11 +91,18 @@ class ReceiverController extends ChangeNotifier {
   DateTime? _lastSignalAt;
   DateTime _lastUiNotify = DateTime.fromMillisecondsSinceEpoch(0);
 
-  /// Minimum wall-clock gap between two decode attempts. Camera frames can
-  /// arrive at 30 fps but the receiver analysis target is ~12–20 fps: each
-  /// symbol stays on screen ~125 ms, so decoding 20×/s already yields 2–3
-  /// exposure-stable reads per symbol. The slot absorbs the excess frames.
+  /// Minimum wall-clock gap between two decode attempts while *searching*
+  /// (no lock yet). Camera frames can arrive at 30 fps but the receiver
+  /// analysis target is ~12–20 fps: each symbol stays on screen ~125 ms, so
+  /// decoding 20×/s already yields 2–3 exposure-stable reads per symbol.
+  /// Once the ROI tracker locks, decodes drop to a few ms and the interval
+  /// narrows to ~25 ms (see [decodeInterval]) so the receiver re-reads each
+  /// held symbol as fast as the camera allows.
   static const Duration kMinDecodeInterval = Duration(milliseconds: 50);
+
+  /// Decode interval while a symbol is being tracked: fast ROI decodes let
+  /// the receiver analyze at up to ~40 fps instead of wasting the slot.
+  static const Duration kLockedDecodeInterval = Duration(milliseconds: 25);
 
   /// UI notification budget: progress refreshes at ~5 Hz; terminal events
   /// (complete / error / auth prompt) always notify immediately.
@@ -104,6 +111,10 @@ class ReceiverController extends ChangeNotifier {
   int decodedFrames = 0;
   int acceptedFrames = 0;
   double decodeFps = 0;
+
+  /// Measured wall time of the last decode attempt (Rust worker round trip),
+  /// kept for diagnostics and future adaptive tuning.
+  Duration _lastDecodeDuration = Duration.zero;
 
   /// Completed transfer (unencrypted or after password).
   OpticalFileData? completed;
@@ -170,6 +181,13 @@ class ReceiverController extends ChangeNotifier {
     _maybeNotify(force: true);
   }
 
+  /// Adaptive decode budget: ~40 fps while ROI-tracking a locked symbol
+  /// (decodes are a few ms on the crop), ~20 fps while searching for a lock.
+  Duration get decodeInterval =>
+      (_tracker.active && hasSignal)
+          ? kLockedDecodeInterval
+          : kMinDecodeInterval;
+
   /// Decode worker: takes the latest frame, decodes it (Rust worker thread,
   /// ROI-tracked), admits the payload and folds it into the fountain.
   Future<void> _pump() async {
@@ -178,11 +196,12 @@ class ReceiverController extends ChangeNotifier {
         await Future<void>.delayed(const Duration(milliseconds: 2));
         continue;
       }
-      // Honor the decode budget without dropping frames: wait for the
-      // interval to elapse before taking the latest frame.
+      // Honor the (adaptive) decode budget without dropping frames: wait for
+      // the interval to elapse before taking the latest frame.
+      final interval = decodeInterval;
       final since = DateTime.now().difference(_lastDecodeAt);
-      if (since < kMinDecodeInterval) {
-        await Future<void>.delayed(kMinDecodeInterval - since);
+      if (since < interval) {
+        await Future<void>.delayed(interval - since);
         continue;
       }
       final frame = _slot.take();
@@ -197,11 +216,13 @@ class ReceiverController extends ChangeNotifier {
   Future<void> _processFrame(LumaFrame frame) async {
     _decoding = true;
     _lastDecodeAt = frame.timestamp;
+    final stopwatch = Stopwatch()..start();
     try {
       final result = await _decodeTracked(frame);
       if (_disposed) {
         return;
       }
+      _lastDecodeDuration = stopwatch.elapsed;
       _tracker = result.tracker;
       final bytes = result.bytes;
       if (bytes == null) {

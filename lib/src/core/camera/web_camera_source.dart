@@ -16,7 +16,9 @@ import 'camera_frame_source.dart';
 import 'luma_frame.dart';
 
 class WebCameraSource implements CameraFrameSource {
-  WebCameraSource({this.captureFramesPerSecond = 15});
+  // 20 fps matches the receiver's adaptive decode budget (20–40 fps): the
+  // canvas capture is cheap, and the latest-wins slot absorbs any excess.
+  WebCameraSource({this.captureFramesPerSecond = 20});
 
   final int captureFramesPerSecond;
 

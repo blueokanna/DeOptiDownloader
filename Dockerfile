@@ -23,23 +23,38 @@ ENV PATH="${FLUTTER_ROOT}/bin:${PATH}"
 WORKDIR /app
 
 # Minimal system packages for `flutter build web` + the Rust toolchain.
+# `clang`/`build-essential`/`pkg-config` are insurance: some build scripts in
+# the dependency tree probe for a C compiler (e.g. the `cc` crate), and
+# debian:bookworm-slim ships none by default — on the CI runner (ubuntu) they
+# are present, so a missing compiler only surfaces in this container.
 RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential \
       ca-certificates \
+      clang \
       curl \
       git \
+      pkg-config \
       unzip \
       xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Rust toolchain: nightly (FRB build-web defaults to nightly + -Z build-std),
-# wasm32 target, rust-src component for build-std, plus prebuilt wasm-pack and
-# the wasm-bindgen CLI version that matches rust/Cargo.lock.
+# plus prebuilt wasm-pack and the wasm-bindgen CLI version that matches
+# rust/Cargo.lock.
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
       --profile minimal \
-      --default-toolchain nightly \
-      --target wasm32-unknown-unknown \
-      --component rust-src
+      --default-toolchain nightly
 ENV PATH="/root/.cargo/bin:${PATH}"
+# `-Z build-std=std,panic_abort` REQUIRES the `rust-src` component, and
+# wasm-pack requires the `wasm32-unknown-unknown` target. rustup's
+# `--component`/`--target` flags on the initial install are unreliable across
+# versions, so add them explicitly here and verify — otherwise cargo fails a
+# few seconds into `flutter_rust_bridge build-web` with an unreadable
+# "exit code: 255".
+RUN rustup component add rust-src --toolchain nightly \
+ && rustup target add wasm32-unknown-unknown --toolchain nightly \
+ && rustup component list --toolchain nightly | grep -q rust-src \
+ && rustup target list --installed | grep -q wasm32-unknown-unknown
 RUN curl -sSL https://github.com/rustwasm/wasm-pack/releases/download/v0.15.0/wasm-pack-v0.15.0-x86_64-unknown-linux-musl.tar.gz \
       | tar -xz -C /usr/local/bin --strip-components=1 wasm-pack-v0.15.0-x86_64-unknown-linux-musl/wasm-pack \
  && curl -sSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.92/wasm-bindgen-0.2.92-x86_64-unknown-linux-musl.tar.gz \
